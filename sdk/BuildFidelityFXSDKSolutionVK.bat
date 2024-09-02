@@ -64,6 +64,7 @@ ECHO 15. PARALLEL SORT
 ECHO 16. SPD
 ECHO 17. SSSR
 ECHO 18. VRS
+ECHO 19. VPU
 ECHO.
 
 set /P samples=Enter numbers of which effects to build [space delimitted]: 
@@ -87,6 +88,7 @@ for /f "tokens=1*" %%a in ("%samples%") do (
    if %%a == 16 set sdk_build_options=-DFFX_SPD=ON %sdk_build_options%
    if %%a == 17 set sdk_build_options=-DFFX_SSSR=ON -DFFX_DENOISER=ON %sdk_build_options%
    if %%a == 18 set sdk_build_options=-DFFX_VRS=ON %sdk_build_options%
+   if %%a == 19 set sdk_build_options=-DFFX_VPU=ON %sdk_build_options%
    set samples=%%b
 )
 if defined samples goto :loop
