@@ -98,6 +98,11 @@ if (FFX_BRIXELIZER_GI OR FFX_ALL)
 	set(START_PROJECT FFX_BRIXELIZER_GI PARENT_SCOPE)
 endif()
 
+if (FFX_VPULESS OR FFX_ALL)
+	add_subdirectory(vpuless)
+	set(START_PROJECT FFX_VPULESS PARENT_SCOPE)
+endif()
+
 # If we are building everything, default FFX_API_FSR as the startup project
 if (FFX_ALL)
     set(START_PROJECT FFX_API_FSR PARENT_SCOPE)

@@ -56,6 +56,7 @@ ECHO 13. PARALLEL SORT
 ECHO 14. SPD
 ECHO 15. SSSR
 ECHO 16. VRS
+ECHO 17. VPULESS
 ECHO.
 
 set /P samples=Enter numbers of which samples to build [space delimitted]: 
@@ -125,6 +126,10 @@ for /f "tokens=1*" %%a in ("%samples%") do (
    if %%a == 16 (
     set samples_build_options=-DFFX_VRS=ON %samples_build_options%
     set sdk_build_options=-DFFX_VRS=ON %sdk_build_options%
+   )
+   if %%a == 17 (
+    set samples_build_options=-DFFX_VPULESS=ON %samples_build_options%
+    set sdk_build_options=-DFFX_FSR1=ON %sdk_build_options%
    )
    set samples=%%b
 )
