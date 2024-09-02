@@ -38,7 +38,7 @@ if (FFX_FI OR FFX_ALL)
 		"${FFX_HOST_PATH}/frameinterpolation/*.cpp")
 	list(APPEND PUBLIC_SOURCES ${FFX_PUBLIC_SOURCES})
 
-    add_executable(vpufulvpuless ${SHARED_SOURCES} ${PRIVATE_SOURCES} ${PUBLIC_SOURCES})
+    	add_executable(vpufulvpuless ${SHARED_SOURCES} ${PRIVATE_SOURCES} ${PUBLIC_SOURCES})
 
 	# API
 	source_group("shared_source"  FILES ${SHARED_SOURCES})

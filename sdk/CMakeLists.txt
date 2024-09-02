@@ -232,6 +232,7 @@ add_subdirectory(${FFX_COMPONENTS_PATH}/brixelizer)
 add_subdirectory(${FFX_COMPONENTS_PATH}/brixelizergi)
 add_subdirectory(${FFX_COMPONENTS_PATH}/classifier)
 add_subdirectory(${FFX_COMPONENTS_PATH}/breadcrumbs)
+add_subdirectory(${FFX_COMPONENTS_PATH}/vpufsr)
 
 # Add appropriate graphics backend if requested
 if(FFX_API_BACKEND STREQUAL DX12_X64)
