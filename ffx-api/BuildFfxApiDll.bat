@@ -34,7 +34,7 @@ if exist CMakeFiles\ (
 if exist CMakeCache.txt (
 	del /S /Q CMakeCache.txt
 )
-cmake -A x64 .. %*%
+cmake -A x64 .. %*% -DFFX_API_BACKEND=DX12_X64
 cmake --build ./ --config Debug --parallel 4 -- /p:CL_MPcount=16
 cmake --build ./ --config Release --parallel 4 -- /p:CL_MPcount=16
 cmake --build ./ --config RelWithDebInfo --parallel 4 -- /p:CL_MPcount=16
