@@ -99,7 +99,7 @@ if (FFX_BRIXELIZER_GI OR FFX_ALL)
 endif()
 
 if (FFX_VPU OR FFX_ALL)
-	add_subdirectory(vpufsr)
+	add_subdirectory(fsrvpu)
 	set(START_PROJECT FFX_BRIXELIZER_GI PARENT_SCOPE)
 endif()
 

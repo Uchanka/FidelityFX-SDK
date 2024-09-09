@@ -1,26 +1,4 @@
-// This file is part of the FidelityFX SDK.
-//
-// Copyright (C) 2024 Advanced Micro Devices, Inc.
-// 
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files(the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and /or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions :
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-// THE SOFTWARE.
-
-#include "fsrapirendermodule.h"
+#include "fsrvpurendermodule.h"
 #include "render/rendermodules/ui/uirendermodule.h"
 #include "render/rasterview.h"
 #include "render/dynamicresourcepool.h"
@@ -54,7 +32,7 @@ using namespace cauldron;
 
 void RestoreApplicationSwapChain(bool recreateSwapchain = true);
 
-void FSRRenderModule::Init(const json& initData)
+void FSRVPUModule::Init(const json& initData)
 {
     m_pTAARenderModule   = static_cast<TAARenderModule*>(GetFramework()->GetRenderModule("TAARenderModule"));
     m_pTransRenderModule = static_cast<TranslucencyRenderModule*>(GetFramework()->GetRenderModule("TranslucencyRenderModule"));
@@ -275,7 +253,7 @@ void FSRRenderModule::Init(const json& initData)
     SwitchUpscaler(m_UiUpscaleMethod);
 }
 
-FSRRenderModule::~FSRRenderModule()
+FSRVPUModule::~FSRVPUModule()
 {
     // Destroy the FSR context
     UpdateFSRContext(false);
@@ -285,7 +263,7 @@ FSRRenderModule::~FSRRenderModule()
     RestoreApplicationSwapChain(false);
 }
 
-void FSRRenderModule::EnableModule(bool enabled)
+void FSRVPUModule::EnableModule(bool enabled)
 {
     // If disabling the render module, we need to disable the upscaler with the framework
     if (!enabled)
@@ -372,7 +350,7 @@ void FSRRenderModule::EnableModule(bool enabled)
     }
 }
 
-void FSRRenderModule::InitUI(UISection* pUISection)
+void FSRVPUModule::InitUI(UISection* pUISection)
 {
     std::vector<const char*> comboOptions = {"Native", "FSR (ffxapi)"};
     pUISection->RegisterUIElement<UICombo>("Method", (int32_t&)m_UiUpscaleMethod, std::move(comboOptions), [this](int32_t cur, int32_t old) { SwitchUpscaler(cur); });
@@ -493,7 +471,7 @@ void FSRRenderModule::InitUI(UISection* pUISection)
     EnableModule(true);
 }
 
-void FSRRenderModule::SwitchUpscaler(int32_t newUpscaler)
+void FSRVPUModule::SwitchUpscaler(int32_t newUpscaler)
 {
     // Flush everything out of the pipe before disabling/enabling things
     GetDevice()->FlushAllCommandQueues();
@@ -529,7 +507,7 @@ void FSRRenderModule::SwitchUpscaler(int32_t newUpscaler)
     ClearReInit();
 }
 
-void FSRRenderModule::UpdatePreset(const int32_t* pOldPreset)
+void FSRVPUModule::UpdatePreset(const int32_t* pOldPreset)
 {
     switch (m_ScalePreset)
     {
@@ -571,19 +549,19 @@ void FSRRenderModule::UpdatePreset(const int32_t* pOldPreset)
     GetFramework()->EnableFrameInterpolation(m_FrameInterpolation);
 }
 
-void FSRRenderModule::UpdateUpscaleRatio(const float* pOldRatio)
+void FSRVPUModule::UpdateUpscaleRatio(const float* pOldRatio)
 {
     // Disable/Enable FSR since resolution ratios have changed
     GetFramework()->EnableUpscaling(true, m_pUpdateFunc);
 }
 
-void FSRRenderModule::UpdateMipBias(const float* pOldBias)
+void FSRVPUModule::UpdateMipBias(const float* pOldBias)
 {
     // Update the scene MipLODBias to use
     GetScene()->SetMipLODBias(m_MipBias);
 }
 
-void FSRRenderModule::FfxMsgCallback(uint32_t type, const wchar_t* message)
+void FSRVPUModule::FfxMsgCallback(uint32_t type, const wchar_t* message)
 {
     if (type == FFX_API_MESSAGE_TYPE_ERROR)
     {
@@ -595,7 +573,7 @@ void FSRRenderModule::FfxMsgCallback(uint32_t type, const wchar_t* message)
     }
 }
 
-ffxReturnCode_t FSRRenderModule::UiCompositionCallback(ffxCallbackDescFrameGenerationPresent* params)
+ffxReturnCode_t FSRVPUModule::UiCompositionCallback(ffxCallbackDescFrameGenerationPresent* params)
 {
     if (s_uiRenderMode != 2)
         return FFX_API_RETURN_ERROR_PARAMETER;
@@ -657,7 +635,7 @@ ffxReturnCode_t FSRRenderModule::UiCompositionCallback(ffxCallbackDescFrameGener
     return FFX_API_RETURN_OK;
 }
 
-void FSRRenderModule::UpdateFSRContext(bool enabled)
+void FSRVPUModule::UpdateFSRContext(bool enabled)
 {
     if (enabled)
     {
@@ -693,7 +671,7 @@ void FSRRenderModule::UpdateFSRContext(bool enabled)
             // Do eror checking in debug
     #if defined(_DEBUG)
             createFsr.flags |= FFX_UPSCALE_ENABLE_DEBUG_CHECKING;
-            createFsr.fpMessage = &FSRRenderModule::FfxMsgCallback;
+            createFsr.fpMessage = &FSRVPUModule::FfxMsgCallback;
     #endif  // #if defined(_DEBUG)
 
             // Create the FSR context
@@ -754,7 +732,9 @@ void FSRRenderModule::UpdateFSRContext(bool enabled)
             m_FrameGenerationConfig.frameGenerationCallbackUserContext = &m_FrameGenContext;
             if (s_uiRenderMode == 2)
             {
-                m_FrameGenerationConfig.presentCallback = [](ffxCallbackDescFrameGenerationPresent* params, void* self) -> auto { return reinterpret_cast<FSRRenderModule*>(self)->UiCompositionCallback(params); };
+                m_FrameGenerationConfig.presentCallback = [](ffxCallbackDescFrameGenerationPresent* params, void* self) -> auto {
+                    return reinterpret_cast<FSRVPUModule*>(self)->UiCompositionCallback(params);
+                };
                 m_FrameGenerationConfig.presentCallbackUserContext = this;
             }
             else
@@ -809,7 +789,7 @@ void FSRRenderModule::UpdateFSRContext(bool enabled)
     }
 }
 
-ResolutionInfo FSRRenderModule::UpdateResolution(uint32_t displayWidth, uint32_t displayHeight)
+ResolutionInfo FSRVPUModule::UpdateResolution(uint32_t displayWidth, uint32_t displayHeight)
 {
     return {static_cast<uint32_t>((float)displayWidth / m_UpscaleRatio * m_LetterboxRatio),
             static_cast<uint32_t>((float)displayHeight / m_UpscaleRatio * m_LetterboxRatio),
@@ -818,7 +798,7 @@ ResolutionInfo FSRRenderModule::UpdateResolution(uint32_t displayWidth, uint32_t
             displayWidth, displayHeight };
 }
 
-void FSRRenderModule::OnPreFrame()
+void FSRVPUModule::OnPreFrame()
 {
     if (NeedsReInit())
     {
@@ -832,7 +812,7 @@ void FSRRenderModule::OnPreFrame()
     }
 }
 
-void FSRRenderModule::OnResize(const ResolutionInfo& resInfo)
+void FSRVPUModule::OnResize(const ResolutionInfo& resInfo)
 {
     if (!ModuleEnabled())
         return;
@@ -845,7 +825,7 @@ void FSRRenderModule::OnResize(const ResolutionInfo& resInfo)
     m_JitterIndex = 0;
 }
 
-void FSRRenderModule::Execute(double deltaTime, CommandList* pCmdList)
+void FSRVPUModule::Execute(double deltaTime, CommandList* pCmdList)
 {
     if (m_pHudLessTexture[m_curUiTextureIndex]->GetResource()->GetCurrentResourceState() != ResourceState::NonPixelShaderResource)
     {
@@ -1132,7 +1112,7 @@ void FSRRenderModule::Execute(double deltaTime, CommandList* pCmdList)
     GetFramework()->SetUpscalingState(UpscalerState::PostUpscale);
 }
 
-void FSRRenderModule::PreTransCallback(double deltaTime, CommandList* pCmdList)
+void FSRVPUModule::PreTransCallback(double deltaTime, CommandList* pCmdList)
 {
     GPUScopedProfileCapture sampleMarker(pCmdList, L"Pre-Trans (FSR)");
 
@@ -1174,7 +1154,7 @@ void FSRRenderModule::PreTransCallback(double deltaTime, CommandList* pCmdList)
     uimod->SetUiSurfaceIndex(m_curUiTextureIndex);
 }
 
-void FSRRenderModule::PostTransCallback(double deltaTime, CommandList* pCmdList)
+void FSRVPUModule::PostTransCallback(double deltaTime, CommandList* pCmdList)
 {
     if ((m_MaskMode != FSRMaskMode::Auto) || (m_UpscaleMethod!= 1))
         return;

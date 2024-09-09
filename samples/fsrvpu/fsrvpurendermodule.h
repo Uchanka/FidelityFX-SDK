@@ -56,7 +56,7 @@ class FSRVPUModule : public cauldron::RenderModule
     } UpscalerType;
 
 public:
-    FSRVPUModule() : RenderModule(L"FSRApiRenderModule") {}
+    FSRVPUModule() : RenderModule(L"FSRVPURenderModule") {}
     virtual ~FSRVPUModule();
 
     void Init(const json& initData);
@@ -226,4 +226,4 @@ private:
 };
 
 // alias to get sample.cpp to use this class.
-using FSRApiRenderModule = FSRVPUModule;
+using FSRVPURenderModule = FSRVPUModule;

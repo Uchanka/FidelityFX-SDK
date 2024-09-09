@@ -21,7 +21,7 @@
 # THE SOFTWARE.
 
 # Declare project
-project(VPULESS_FSR)
+project(FSR_VPU)
 
 # ---------------------------------------------
 # Fidelity FX Api FSR Sample
@@ -31,28 +31,28 @@ project(VPULESS_FSR)
 add_library(amd_fidelityfx SHARED IMPORTED)
 set_target_properties(amd_fidelityfx PROPERTIES
 					  INTERFACE_INCLUDE_DIRECTORIES "${API_ROOT}/include"
-					  IMPORTED_LOCATION_RELEASEDX12 "${PREBUILT_SIGNED_DLL_ROOT}/amd_fidelityfx_dx12.dll"
-					  IMPORTED_LOCATION_RELWITHDEBINFODX12 "${PREBUILT_SIGNED_DLL_ROOT}/amd_fidelityfx_dx12.dll"
-					  IMPORTED_LOCATION_DEBUGDX12 "${PREBUILT_SIGNED_DLL_ROOT}/amd_fidelityfx_dx12.dll"
-					  IMPORTED_LOCATION_RELEASEVK "${PREBUILT_SIGNED_DLL_ROOT}/amd_fidelityfx_vk.dll"
-					  IMPORTED_LOCATION_RELWITHDEBINFOVK "${PREBUILT_SIGNED_DLL_ROOT}/amd_fidelityfx_vk.dll"
-					  IMPORTED_LOCATION_DEBUGVK "${PREBUILT_SIGNED_DLL_ROOT}/amd_fidelityfx_vk.dll"
-					  IMPORTED_IMPLIB_RELEASEDX12 "${PREBUILT_SIGNED_DLL_ROOT}/amd_fidelityfx_dx12.lib"
-					  IMPORTED_IMPLIB_RELWITHDEBINFODX12 "${PREBUILT_SIGNED_DLL_ROOT}/amd_fidelityfx_dx12.lib"
-					  IMPORTED_IMPLIB_DEBUGDX12 "${PREBUILT_SIGNED_DLL_ROOT}/amd_fidelityfx_dx12.lib"
-					  IMPORTED_IMPLIB_RELEASEVK "${PREBUILT_SIGNED_DLL_ROOT}/amd_fidelityfx_vk.lib"
-					  IMPORTED_IMPLIB_RELWITHDEBINFOVK "${PREBUILT_SIGNED_DLL_ROOT}/amd_fidelityfx_vk.lib"
-					  IMPORTED_IMPLIB_DEBUGVK "${PREBUILT_SIGNED_DLL_ROOT}/amd_fidelityfx_vk.lib")
+					  IMPORTED_LOCATION_RELEASEDX12 "${API_ROOT}/bin/amd_fidelityfx_dx12.dll"
+					  IMPORTED_LOCATION_RELWITHDEBINFODX12 "${API_ROOT}/bin/amd_fidelityfx_dx12drel.dll"
+					  IMPORTED_LOCATION_DEBUGDX12 "${API_ROOT}/bin/amd_fidelityfx_dx12d.dll"
+					  IMPORTED_LOCATION_RELEASEVK "${API_ROOT}/bin/amd_fidelityfx_vk.dll"
+					  IMPORTED_LOCATION_RELWITHDEBINFOVK "${API_ROOT}/bin/amd_fidelityfx_vkdrel.dll"
+					  IMPORTED_LOCATION_DEBUGVK "${API_ROOT}/bin/amd_fidelityfx_vkd.dll"
+					  IMPORTED_IMPLIB_RELEASEDX12 "${API_ROOT}/bin/amd_fidelityfx_dx12.lib"
+					  IMPORTED_IMPLIB_RELWITHDEBINFODX12 "${API_ROOT}/bin/amd_fidelityfx_dx12drel.lib"
+					  IMPORTED_IMPLIB_DEBUGDX12 "${API_ROOT}/bin/amd_fidelityfx_dx12d.lib"
+					  IMPORTED_IMPLIB_RELEASEVK "${API_ROOT}/bin/amd_fidelityfx_vk.lib"
+					  IMPORTED_IMPLIB_RELWITHDEBINFOVK "${API_ROOT}/bin/amd_fidelityfx_vkdrel.lib"
+					  IMPORTED_IMPLIB_DEBUGVK "${API_ROOT}/bin/amd_fidelityfx_vkd.lib")
 
 # FSR render module files
-set(vpuful_src ${CMAKE_CURRENT_SOURCE_DIR}/fsrvpu_ffxapi.h ${CMAKE_CURRENT_SOURCE_DIR}/fsrvpuful_ffxapi.cpp)
+set(vpuful_src ${CMAKE_CURRENT_SOURCE_DIR}/fsrvpurendermodule.h ${CMAKE_CURRENT_SOURCE_DIR}/fsrvpurendermodule.cpp)
 
 # Add config file
-set(config_file ${CMAKE_CURRENT_SOURCE_DIR}/config/fsrapiconfig.json)
+set(config_file ${CMAKE_CURRENT_SOURCE_DIR}/config/fsrvpuconfig.json)
 copyCommand("${config_file}" ${CONFIG_OUTPUT})
 
 # Add the sample to the solution
-add_executable(${PROJECT_NAME} ${default_icon_src} ${config_file} ${vpuful_src} ${fsr_shaders})
+add_executable(${PROJECT_NAME} WIN32 ${default_icon_src} ${default_entry_point} ${default_sample_files} ${config_file} ${vpuful_src} ${fsr_shaders})
 # add_executable(${PROJECT_NAME} ${default_icon_src} ${config_file} ${vpuless_src} ${fsr_shaders})
 
 # Setup the correct exe based on backend name
@@ -69,7 +69,7 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 						OUTPUT_NAME_RELWITHDEBINFOVK "${EXE_OUT_NAME}drelVK"
 						VS_DEBUGGER_WORKING_DIRECTORY "${BIN_OUTPUT}")
 
-file(GLOB api_dlls ${PREBUILT_SIGNED_DLL_ROOT}/*.dll)
+file(GLOB api_dlls ${API_ROOT}/bin/*.dll)
 
 # Copy amd_fidelityfx dll to output. Relies on it being built before this project is configured!
 # TODO: remove tech debt from build system....
@@ -79,9 +79,9 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 
 # Add compile definitions to identify the sample
 target_compile_definitions(${PROJECT_NAME} PRIVATE SampleName=L"FidelityFX FSR FFXAPI v1.0"
-										   ConfigFileName=L"configs/fsrapiconfig.json"
-										   ConfigSampleName="FidelityFX FSR FFXAPI"
-										   RenderModuleName=FSRApi)
+										   ConfigFileName=L"configs/fsrvpuconfig.json"
+										   ConfigSampleName="FSRVPU"
+										   RenderModuleName=FSRVPU)
 
 # Add manifest info
 addManifest(${PROJECT_NAME})

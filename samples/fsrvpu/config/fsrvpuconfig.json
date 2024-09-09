@@ -1,5 +1,5 @@
 {
-    "FidelityFX FSR FFXAPI": {
+    "FSRVPU": {
         "MotionVectorGeneration": "GBufferRenderModule",
 
         "RenderResources": {
@@ -24,7 +24,7 @@
             "TranslucencyRenderModule",
             "GPUParticleRenderModule",
             "TAARenderModule",
-            "FSRApiRenderModule",
+            "FSRVPURenderModule",
             "ToneMappingRenderModule"
         ],
 
