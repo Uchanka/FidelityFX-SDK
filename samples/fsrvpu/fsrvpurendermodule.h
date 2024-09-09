@@ -205,6 +205,16 @@ private:
     const cauldron::Texture*  m_pCompositionMask       = nullptr;
     const cauldron::Texture*  m_pOpaqueTexture         = nullptr;
 
+    // FSR counts from 1, and so do I
+    const cauldron::Texture* m_pColF1FromFile = nullptr;
+    const cauldron::Texture* m_pColF2FromFile = nullptr;
+    const cauldron::Texture* m_pDepF1FromFile = nullptr;
+    const cauldron::Texture* m_pDepF2FromFile = nullptr;
+    // Hijacking FSR Motion Vectors
+    const cauldron::Texture* m_pGeoMvFromFile = nullptr;
+    // Hijacking FSR Optical Flow
+    const cauldron::Texture* m_pOptMvFromFile = nullptr;
+
     // Raster views for reactive/composition masks
     std::vector<const cauldron::RasterView*> m_RasterViews           = {};
     cauldron::ResourceView*                  m_pUiTargetResourceView = nullptr;

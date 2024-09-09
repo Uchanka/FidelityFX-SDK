@@ -26,11 +26,82 @@
 #endif  // FFX_API_DX12
 
 #include <functional>
+#include <experimental/filesystem>
 
 using namespace std;
 using namespace cauldron;
 
 void RestoreApplicationSwapChain(bool recreateSwapchain = true);
+
+void LoadTextureFromFile(const std::wstring& path, const std::wstring& name, ResourceFormat format, ResourceFlags flags)
+{
+    TextureLoadInfo loadInfo = TextureLoadInfo(path, true, 1.0f, flags);
+
+    bool fileExists = experimental::filesystem::exists(loadInfo.TextureFile);
+    CauldronAssert(ASSERT_ERROR,
+                   fileExists,
+                   L"Could not find texture file %ls. Please run ClearMediaCache.bat followed by UpdateMedia.bat to sync to latest media.",
+                   loadInfo.TextureFile.c_str());
+
+    if (fileExists)
+    {
+        TextureDesc texDesc = {};
+
+        // Figure out how to load this texture (whether it's a DDS or other)
+        bool              ddsFile = loadInfo.TextureFile.extension() == L".dds" || loadInfo.TextureFile.extension() == L".DDS";
+        TextureDataBlock* pTextureData;
+
+        if (ddsFile)
+            pTextureData = new DDSTextureDataBlock();
+        else
+            pTextureData = new WICTextureDataBlock();
+
+        bool loaded = pTextureData->LoadTextureData(loadInfo.TextureFile, loadInfo.AlphaThreshold, texDesc);
+        
+        CauldronAssert(ASSERT_ERROR, loaded, L"Could not load texture %ls (TextureDataBlock::LoadTextureData() failed)", loadInfo.TextureFile.c_str());
+        if (loaded)
+        {
+            // We'll use a name that we know this time for sure
+            texDesc.Name = name;
+
+            texDesc.Format = format;
+
+            // Pass along resource flags
+            texDesc.Flags = static_cast<ResourceFlags>(loadInfo.Flags);
+
+            // If SRGB was requested, apply format conversion
+            if (loadInfo.SRGB)
+                texDesc.Format = ToGamma(texDesc.Format);
+
+            Texture* pNewTexture = Texture::CreateContentTexture(&texDesc);
+            CauldronAssert(ASSERT_ERROR, pNewTexture != nullptr, L"Could not create the texture %ls", texDesc.Name.c_str());
+            if (pNewTexture != nullptr)
+            {
+                pNewTexture->CopyData(pTextureData);
+
+                // Start managing the texture at this point
+                bool emplaced = GetContentManager()->StartManagingContent(texDesc.Name, pNewTexture);
+
+                // If it was emplaced, need to queue it up for a transition during the first graphics cmd list
+                if (emplaced)
+                {
+                    // Now that the resource is ready, queue the resource change on the graphics queue for the next time it executes
+                    Barrier textureTransition = Barrier::Transition(
+                        pNewTexture->GetResource(), ResourceState::CopyDest, ResourceState::PixelShaderResource | ResourceState::NonPixelShaderResource);
+                    GetDevice()->ExecuteResourceTransitionImmediate(1, &textureTransition);
+                }
+
+                // if it wasn't emplaced, it's a duplicate and we can just delete it (callback will be called with previously loaded asset)
+                else
+                {
+                    delete pNewTexture;
+                }
+            }
+        }
+
+        delete pTextureData;
+    }
+}
 
 void FSRVPUModule::Init(const json& initData)
 {
@@ -41,6 +112,19 @@ void FSRVPUModule::Init(const json& initData)
     CauldronAssert(ASSERT_CRITICAL, m_pTransRenderModule, L"FidelityFX FSR Sample: Error: Could not find Translucency render module.");
     CauldronAssert(ASSERT_CRITICAL, m_pToneMappingRenderModule, L"FidelityFX FSR Sample: Error: Could not find Tone Mapping render module.");
 
+    LoadTextureFromFile(L"..\\media\\frame0.jpg", L"FSRVPUFrame1", 
+        ResourceFormat::RGBA8_SNORM, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
+    LoadTextureFromFile(L"..\\media\\frame1.jpg", L"FSRVPUFrame2", 
+        ResourceFormat::RGBA8_SNORM, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
+    LoadTextureFromFile(L"..\\media\\depth0.jpg", L"FSRVPUFrame1Depth",
+        ResourceFormat::R32_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
+    LoadTextureFromFile(L"..\\media\\depth1.jpg", L"FSRVPUFrame2Depth", 
+        ResourceFormat::R32_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
+    LoadTextureFromFile(L"..\\media\\GeoMv.jpg", L"FSRVPUFrame1GeoMv",
+        ResourceFormat::RG16_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
+    LoadTextureFromFile(L"..\\media\\OptMf.jpg", L"FSRVPUFrame1OptMv", 
+        ResourceFormat::RG16_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
+
     // Fetch needed resources
     m_pColorTarget           = GetFramework()->GetColorTargetForCallback(GetName());
     m_pTonemappedColorTarget = GetFramework()->GetRenderTexture(L"SwapChainProxy");
@@ -49,6 +133,13 @@ void FSRVPUModule::Init(const json& initData)
     m_pReactiveMask          = GetFramework()->GetRenderTexture(L"ReactiveMask");
     m_pCompositionMask       = GetFramework()->GetRenderTexture(L"TransCompMask");
     CauldronAssert(ASSERT_CRITICAL, m_pMotionVectors && m_pReactiveMask && m_pCompositionMask, L"Could not get one of the needed resources for FSR Rendermodule.");
+
+    m_pColF1FromFile = GetFramework()->GetRenderTexture(L"FSRVPUFrame1");
+    m_pColF2FromFile = GetFramework()->GetRenderTexture(L"FSRVPUFrame2");
+    m_pDepF1FromFile = GetFramework()->GetRenderTexture(L"FSRVPUFrame1Depth");
+    m_pDepF2FromFile = GetFramework()->GetRenderTexture(L"FSRVPUFrame2Depth");
+    m_pGeoMvFromFile = GetFramework()->GetRenderTexture(L"FSRVPUFrame1GeoMv");
+    m_pOptMvFromFile = GetFramework()->GetRenderTexture(L"FSRVPUFrame1OptMv");
 
     // Get a CPU resource view that we'll use to map the render target to
     GetResourceViewAllocator()->AllocateCPURenderViews(&m_pRTResourceView);
@@ -897,10 +988,11 @@ void FSRVPUModule::Execute(double deltaTime, CommandList* pCmdList)
 #elif defined(FFX_API_VK)
         dispatchUpscale.commandList = pCmdList->GetImpl()->VKCmdBuffer();
 #endif  // defined(FFX_API_DX12)
-        dispatchUpscale.color         = SDKWrapper::ffxGetResourceApi(m_pTempTexture->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
+        /*dispatchUpscale.color    = SDKWrapper::ffxGetResourceApi(m_pTempTexture->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
         dispatchUpscale.depth         = SDKWrapper::ffxGetResourceApi(m_pDepthTarget->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
         dispatchUpscale.motionVectors = SDKWrapper::ffxGetResourceApi(m_pMotionVectors->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
-        dispatchUpscale.exposure      = SDKWrapper::ffxGetResourceApi(nullptr, FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
+        dispatchUpscale.exposure      = SDKWrapper::ffxGetResourceApi(nullptr, FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);*/
+        dispatchUpscale.color = SDKWrapper::ffxGetResourceApi(m_pColF1FromFile->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
         dispatchUpscale.output        = SDKWrapper::ffxGetResourceApi(m_pColorTarget->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
 
         if (m_MaskMode != FSRMaskMode::Disabled)
