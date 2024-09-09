@@ -134,12 +134,12 @@ void FSRVPUModule::Init(const json& initData)
     m_pCompositionMask       = GetFramework()->GetRenderTexture(L"TransCompMask");
     CauldronAssert(ASSERT_CRITICAL, m_pMotionVectors && m_pReactiveMask && m_pCompositionMask, L"Could not get one of the needed resources for FSR Rendermodule.");
 
-    m_pColF1FromFile = GetFramework()->GetRenderTexture(L"FSRVPUFrame1");
-    m_pColF2FromFile = GetFramework()->GetRenderTexture(L"FSRVPUFrame2");
-    m_pDepF1FromFile = GetFramework()->GetRenderTexture(L"FSRVPUFrame1Depth");
-    m_pDepF2FromFile = GetFramework()->GetRenderTexture(L"FSRVPUFrame2Depth");
-    m_pGeoMvFromFile = GetFramework()->GetRenderTexture(L"FSRVPUFrame1GeoMv");
-    m_pOptMvFromFile = GetFramework()->GetRenderTexture(L"FSRVPUFrame1OptMv");
+    m_pColF1FromFile = GetContentManager()->GetTexture(L"FSRVPUFrame1");
+    m_pColF2FromFile = GetContentManager()->GetTexture(L"FSRVPUFrame2");
+    m_pDepF1FromFile = GetContentManager()->GetTexture(L"FSRVPUFrame1Depth");
+    m_pDepF2FromFile = GetContentManager()->GetTexture(L"FSRVPUFrame2Depth");
+    m_pGeoMvFromFile = GetContentManager()->GetTexture(L"FSRVPUFrame1GeoMv");
+    m_pOptMvFromFile = GetContentManager()->GetTexture(L"FSRVPUFrame1OptMv");
 
     // Get a CPU resource view that we'll use to map the render target to
     GetResourceViewAllocator()->AllocateCPURenderViews(&m_pRTResourceView);
@@ -993,6 +993,9 @@ void FSRVPUModule::Execute(double deltaTime, CommandList* pCmdList)
         dispatchUpscale.motionVectors = SDKWrapper::ffxGetResourceApi(m_pMotionVectors->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
         dispatchUpscale.exposure      = SDKWrapper::ffxGetResourceApi(nullptr, FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);*/
         dispatchUpscale.color = SDKWrapper::ffxGetResourceApi(m_pColF1FromFile->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
+        dispatchUpscale.depth = SDKWrapper::ffxGetResourceApi(m_pDepF1FromFile->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
+        dispatchUpscale.motionVectors = SDKWrapper::ffxGetResourceApi(m_pGeoMvFromFile->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
+        dispatchUpscale.exposure = SDKWrapper::ffxGetResourceApi(nullptr, FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
         dispatchUpscale.output        = SDKWrapper::ffxGetResourceApi(m_pColorTarget->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
 
         if (m_MaskMode != FSRMaskMode::Disabled)
