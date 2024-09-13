@@ -1848,6 +1848,7 @@ namespace cauldron
 
         // Present
         m_pSwapChain->Present();
+        m_pSwapChain->DumpSwapChainToFile(L"../media/Out.jpg");
 
         // If we are doing GPU Validation, flush every frame
         if (m_Config.GPUValidationEnabled)

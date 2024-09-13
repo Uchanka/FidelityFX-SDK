@@ -329,6 +329,298 @@ namespace cauldron
         MipImage(bytesWidth / 4, height);
     }
 
+// Whatever for the Depth
+
+    DepthTextureDataBlock::~DepthTextureDataBlock()
+    {
+        if (m_pData)
+            free(m_pData);
+    }
+
+    float DepthTextureDataBlock::GetAlphaCoverage(uint32_t width, uint32_t height, float scale, uint32_t alphaThreshold) const
+    {
+        double value = 0.0;
+
+        uint32_t* pImgData = reinterpret_cast<uint32_t*>(m_pData);
+
+        for (uint32_t y = 0; y < height; ++y)
+        {
+            for (uint32_t x = 0; x < width; ++x)
+            {
+                uint8_t* pPixel = reinterpret_cast<uint8_t*>(pImgData++);
+                uint32_t alpha  = static_cast<uint32_t>(scale * (float)pPixel[3]);
+                if (alpha > 255)
+                    alpha = 255;
+                if (alpha <= alphaThreshold)
+                    continue;
+
+                value += alpha;
+            }
+        }
+
+        return static_cast<float>(value / (height * width * 255));
+    }
+
+    void DepthTextureDataBlock::ScaleAlpha(uint32_t width, uint32_t height, float scale)
+    {
+        uint32_t* pImgData = reinterpret_cast<uint32_t*>(m_pData);
+
+        for (uint32_t y = 0; y < height; ++y)
+        {
+            for (uint32_t x = 0; x < width; ++x)
+            {
+                uint8_t* pPixel = reinterpret_cast<uint8_t*>(pImgData++);
+
+                int32_t alpha = (int)(scale * (float)pPixel[3]);
+                if (alpha > 255)
+                    alpha = 255;
+
+                pPixel[3] = alpha;
+            }
+        }
+    }
+
+    void DepthTextureDataBlock::MipImage(uint32_t width, uint32_t height)
+    {
+        //compute mip so next call gets the lower mip
+        int32_t offsetsX[] = {0, 1, 0, 1};
+        int32_t offsetsY[] = {0, 0, 1, 1};
+
+        float* pImgData = reinterpret_cast<float*>(m_pData);
+
+#define GetByte(color, component) (((color) >> (8 * (component))) & 0xff)
+#define GetColor(ptr, x, y)       (ptr[(x) + (y) * width])
+#define SetColor(ptr, x, y, col)  ptr[(x) + (y) * width / 2] = col;
+
+        for (uint32_t y = 0; y < height; y += 2)
+        {
+            for (uint32_t x = 0; x < width; x += 2)
+            {
+                float avgDepth = 0.0f;
+                for (uint32_t i = 0; i < 4; ++i)
+                    avgDepth += GetColor(pImgData, x + offsetsX[i], y + offsetsY[i]);
+                avgDepth *= 0.25f;
+                SetColor(pImgData, x / 2, y / 2, avgDepth);
+            }
+        }
+    }
+
+    bool DepthTextureDataBlock::LoadTextureData(filesystem::path& textureFile, float alphaThreshold, TextureDesc& texDesc)
+    {
+        std::string fileName = textureFile.u8string();
+
+        int32_t channels;
+        //Maybe go stbi_load_16?
+        char* tempData = reinterpret_cast<char*>(
+            stbi_load(fileName.c_str(), reinterpret_cast<int32_t*>(&texDesc.Width), reinterpret_cast<int32_t*>(&texDesc.Height), &channels, STBI_grey));
+        if (!tempData)
+            return false;
+
+        m_pData = reinterpret_cast<char*>(new float[texDesc.Width * texDesc.Height]);
+        
+        for (uint32_t h = 0; h < texDesc.Height; ++h)
+        {
+            for (uint32_t w = 0; w < texDesc.Width; ++w)
+            {
+                char* pPixel = (tempData + (h * texDesc.Width + w));
+                float val = pPixel[0] / 255.0f;
+                m_pData[h * texDesc.Width + w] = val;
+            }
+        }
+
+        // Compute number of mips
+        uint32_t mipWidth  = texDesc.Width;
+        uint32_t mipHeight = texDesc.Height;
+        texDesc.MipLevels  = 0;
+        for (;;)
+        {
+            ++texDesc.MipLevels;
+            if (mipWidth > 1)
+                mipWidth >>= 1;
+            if (mipHeight > 1)
+                mipHeight >>= 1;
+            if (mipWidth == 1 && mipHeight == 1)
+                break;
+        }
+
+        // Fill in remaining texture information
+        texDesc.DepthOrArraySize = 1;
+        texDesc.Format           = ResourceFormat::R32_FLOAT;
+        texDesc.Dimension        = TextureDimension::Texture2D;
+
+        // If there is an alpha threshold, compute the alpha test coverage of the top mip
+        // Mip generation will try to match this value so objects don't get thinner as they use lower mips
+        m_AlphaThreshold = 1.0f;
+        free(tempData);
+        return true;
+    }
+
+    void DepthTextureDataBlock::CopyTextureData(void* pDest, uint32_t stride, uint32_t bytesWidth, uint32_t height, uint32_t readOffset)
+    {
+        for (uint32_t y = 0; y < height; ++y)
+            memcpy((char*)pDest + y * stride, m_pData + y * bytesWidth, bytesWidth);
+
+        // Generate the next mip in the chain to read
+        MipImage(bytesWidth / 4, height);
+    }
+
+    // Whatever for the MV
+    MVTextureDataBlock::~MVTextureDataBlock()
+    {
+        if (m_pData)
+            free(m_pData);
+    }
+
+    float MVTextureDataBlock::GetAlphaCoverage(uint32_t width, uint32_t height, float scale, uint32_t alphaThreshold) const
+    {
+        double value = 0.0;
+
+        uint32_t* pImgData = reinterpret_cast<uint32_t*>(m_pData);
+
+        for (uint32_t y = 0; y < height; ++y)
+        {
+            for (uint32_t x = 0; x < width; ++x)
+            {
+                uint8_t* pPixel = reinterpret_cast<uint8_t*>(pImgData++);
+                uint32_t alpha  = static_cast<uint32_t>(scale * (float)pPixel[3]);
+                if (alpha > 255)
+                    alpha = 255;
+                if (alpha <= alphaThreshold)
+                    continue;
+
+                value += alpha;
+            }
+        }
+
+        return static_cast<float>(value / (height * width * 255));
+    }
+
+    void MVTextureDataBlock::ScaleAlpha(uint32_t width, uint32_t height, float scale)
+    {
+        uint32_t* pImgData = reinterpret_cast<uint32_t*>(m_pData);
+
+        for (uint32_t y = 0; y < height; ++y)
+        {
+            for (uint32_t x = 0; x < width; ++x)
+            {
+                uint8_t* pPixel = reinterpret_cast<uint8_t*>(pImgData++);
+
+                int32_t alpha = (int)(scale * (float)pPixel[3]);
+                if (alpha > 255)
+                    alpha = 255;
+
+                pPixel[3] = alpha;
+            }
+        }
+    }
+
+    void MVTextureDataBlock::MipImage(uint32_t width, uint32_t height)
+    {
+        //compute mip so next call gets the lower mip
+        int32_t offsetsX[] = {0, 1, 0, 1};
+        int32_t offsetsY[] = {0, 0, 1, 1};
+
+        uint32_t* pImgData = reinterpret_cast<uint32_t*>(m_pData);
+
+#define GetByte(color, component) (((color) >> (8 * (component))) & 0xff)
+#define GetColor(ptr, x, y)       (ptr[(x) + (y) * width])
+#define SetColor(ptr, x, y, col)  ptr[(x) + (y) * width / 2] = col;
+
+        for (uint32_t y = 0; y < height; y += 2)
+        {
+            for (uint32_t x = 0; x < width; x += 2)
+            {
+                uint32_t ccc = 0;
+                for (uint32_t c = 0; c < 4; ++c)
+                {
+                    uint32_t cc = 0;
+                    for (uint32_t i = 0; i < 4; ++i)
+                        cc += GetByte(GetColor(pImgData, x + offsetsX[i], y + offsetsY[i]), 3 - c);
+
+                    ccc = (ccc << 8) | (cc / 4);
+                }
+                SetColor(pImgData, x / 2, y / 2, ccc);
+            }
+        }
+
+        // For cutouts we need to scale the alpha channel to match the coverage of the top MIP map
+        // otherwise cutouts seem to get thinner when smaller mips are used
+        // Credits: http://www.ludicon.com/castano/blog/articles/computing-alpha-mipmaps/
+        if (m_AlphaTestCoverage < 1.0)
+        {
+            float ini = 0;
+            float fin = 10;
+            float mid;
+            float alphaPercentage;
+            int   iter = 0;
+            for (; iter < 50; iter++)
+            {
+                mid             = (ini + fin) / 2;
+                alphaPercentage = GetAlphaCoverage(width / 2, height / 2, mid, (int)(m_AlphaThreshold * 255));
+
+                if (fabs(alphaPercentage - m_AlphaTestCoverage) < .001)
+                    break;
+
+                if (alphaPercentage > m_AlphaTestCoverage)
+                    fin = mid;
+                if (alphaPercentage < m_AlphaTestCoverage)
+                    ini = mid;
+            }
+            ScaleAlpha(width / 2, height / 2, mid);
+        }
+    }
+
+    bool MVTextureDataBlock::LoadTextureData(filesystem::path& textureFile, float alphaThreshold, TextureDesc& texDesc)
+    {
+        std::string fileName = textureFile.u8string();
+
+        int32_t channels;
+        m_pData = reinterpret_cast<char*>(
+            stbi_load(fileName.c_str(), reinterpret_cast<int32_t*>(&texDesc.Width), reinterpret_cast<int32_t*>(&texDesc.Height), &channels, STBI_rgb_alpha));
+
+        if (!m_pData)
+            return false;
+
+        // Compute number of mips
+        uint32_t mipWidth  = texDesc.Width;
+        uint32_t mipHeight = texDesc.Height;
+        texDesc.MipLevels  = 0;
+        for (;;)
+        {
+            ++texDesc.MipLevels;
+            if (mipWidth > 1)
+                mipWidth >>= 1;
+            if (mipHeight > 1)
+                mipHeight >>= 1;
+            if (mipWidth == 1 && mipHeight == 1)
+                break;
+        }
+
+        // Fill in remaining texture information
+        texDesc.DepthOrArraySize = 1;
+        texDesc.Format           = ResourceFormat::RGBA8_UNORM;
+        texDesc.Dimension        = TextureDimension::Texture2D;
+
+        // If there is an alpha threshold, compute the alpha test coverage of the top mip
+        // Mip generation will try to match this value so objects don't get thinner as they use lower mips
+        m_AlphaThreshold = alphaThreshold;
+        if (m_AlphaThreshold < 1.0f)
+            m_AlphaTestCoverage = GetAlphaCoverage(texDesc.Width, texDesc.Height, 1.0f, (uint32_t)(255 * m_AlphaThreshold));
+        else
+            m_AlphaTestCoverage = 1.0f;
+
+        return true;
+    }
+
+    void MVTextureDataBlock::CopyTextureData(void* pDest, uint32_t stride, uint32_t bytesWidth, uint32_t height, uint32_t readOffset)
+    {
+        for (uint32_t y = 0; y < height; ++y)
+            memcpy((char*)pDest + y * stride, m_pData + y * bytesWidth, bytesWidth);
+
+        // Generate the next mip in the chain to read
+        MipImage(bytesWidth / 4, height);
+    }
+
     // Needed for DDS loading
 #include <dxgiformat.h>
 

@@ -138,6 +138,66 @@ namespace cauldron
         float m_AlphaThreshold = 1.f;
     };
 
+    class DepthTextureDataBlock : public TextureDataBlock
+    {
+    public:
+        DepthTextureDataBlock()
+            : TextureDataBlock()
+        {
+        }
+        virtual ~DepthTextureDataBlock();
+
+        /**
+         * @brief   Loads the texture data to memory according to the DataBlock type.
+         */
+        virtual bool LoadTextureData(std::experimental::filesystem::path& textureFile, float alphaThreshold, TextureDesc& texDesc) override;
+
+        /**
+         * @brief   Copies the texture data to the resource's backing memory. Will also generate mip-chain.
+         */
+        virtual void CopyTextureData(void* pDest, uint32_t stride, uint32_t widthStride, uint32_t height, uint32_t sliceOffset) override;
+
+    private:
+        float GetAlphaCoverage(uint32_t width, uint32_t height, float scale, uint32_t alphaThreshold) const;
+        void  ScaleAlpha(uint32_t width, uint32_t height, float scale);
+        void  MipImage(uint32_t width, uint32_t height);
+
+        char* m_pData = nullptr;
+
+        float m_AlphaTestCoverage = 1.f;
+        float m_AlphaThreshold    = 1.f;
+    };
+
+    class MVTextureDataBlock : public TextureDataBlock
+    {
+    public:
+        MVTextureDataBlock()
+            : TextureDataBlock()
+        {
+        }
+        virtual ~MVTextureDataBlock();
+
+        /**
+         * @brief   Loads the texture data to memory according to the DataBlock type.
+         */
+        virtual bool LoadTextureData(std::experimental::filesystem::path& textureFile, float alphaThreshold, TextureDesc& texDesc) override;
+
+        /**
+         * @brief   Copies the texture data to the resource's backing memory. Will also generate mip-chain.
+         */
+        virtual void CopyTextureData(void* pDest, uint32_t stride, uint32_t widthStride, uint32_t height, uint32_t sliceOffset) override;
+
+    private:
+        float GetAlphaCoverage(uint32_t width, uint32_t height, float scale, uint32_t alphaThreshold) const;
+        void  ScaleAlpha(uint32_t width, uint32_t height, float scale);
+        void  MipImage(uint32_t width, uint32_t height);
+
+        char* m_pData = nullptr;
+
+        float m_AlphaTestCoverage = 1.f;
+        float m_AlphaThreshold    = 1.f;
+    };
+
     /**
      * @class DDSTextureDataBlock
      *

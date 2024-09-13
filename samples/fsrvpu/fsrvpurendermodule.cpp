@@ -40,10 +40,19 @@ void RestoreApplicationSwapChain(bool recreateSwapchain = true);
 
 Texture* LoadTextureFromFile(const std::wstring& path, const std::wstring& name, ResourceFormat format, ResourceFlags flags)
 {
-    TextureLoadInfo loadInfo = TextureLoadInfo(path, 
-        ((format == ResourceFormat::RG16_FLOAT) | (format == ResourceFormat::R32_FLOAT)) ? false : true,
-        1.0f,
-        flags);
+    enum TypeOfFile
+    {
+        Color,
+        Depth,
+        Motion
+    };
+    TypeOfFile typeOfFile = Color;
+    if (format == ResourceFormat::R32_FLOAT)
+        typeOfFile = Depth;
+    else if (format == ResourceFormat::RG16_FLOAT)
+        typeOfFile = Motion;
+    
+    TextureLoadInfo loadInfo = TextureLoadInfo(path, typeOfFile == Color ? true : false, 1.0f, flags);
 
     bool fileExists = experimental::filesystem::exists(loadInfo.TextureFile);
     CauldronAssert(ASSERT_ERROR,
@@ -60,9 +69,26 @@ Texture* LoadTextureFromFile(const std::wstring& path, const std::wstring& name,
         TextureDataBlock* pTextureData;
 
         if (ddsFile)
+        {
             pTextureData = new DDSTextureDataBlock();
+        }
         else
-            pTextureData = new WICTextureDataBlock();
+        {
+            switch (typeOfFile)
+            {
+            case Color:
+                pTextureData = new WICTextureDataBlock();
+                break;
+            case Depth:
+                pTextureData = new DepthTextureDataBlock();
+                break;
+            case Motion:
+                pTextureData = new MVTextureDataBlock();
+                break;
+            default:
+                break;
+            };
+        }
 
         bool loaded = pTextureData->LoadTextureData(loadInfo.TextureFile, loadInfo.AlphaThreshold, texDesc);
         
@@ -189,17 +215,17 @@ void FSRVPUModule::Init(const json& initData)
     CauldronAssert(ASSERT_CRITICAL, m_pMotionVectors && m_pReactiveMask && m_pCompositionMask, L"Could not get one of the needed resources for FSR Rendermodule.");
 
     m_pColF1FromFile = LoadTextureFromFile(
-        L"..\\media\\frame0.jpg", L"FSRVPUFrame1", ResourceFormat::RGBA8_SNORM, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
+        L"..\\media\\Color0.png", L"FSRVPUFrame1", ResourceFormat::RGBA8_SNORM, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
     m_pColF2FromFile = LoadTextureFromFile(
-        L"..\\media\\frame1.jpg", L"FSRVPUFrame2", ResourceFormat::RGBA8_SNORM, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
+        L"..\\media\\Color1.png", L"FSRVPUFrame2", ResourceFormat::RGBA8_SNORM, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
     m_pDepF1FromFile = LoadTextureFromFile(
-        L"..\\media\\depth0.jpg", L"FSRVPUFrame1Depth", ResourceFormat::R32_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
+        L"..\\media\\Depth0.png", L"FSRVPUFrame1Depth", ResourceFormat::R32_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
     m_pDepF2FromFile = LoadTextureFromFile(
-        L"..\\media\\depth1.jpg", L"FSRVPUFrame2Depth", ResourceFormat::R32_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
+        L"..\\media\\Depth1.png", L"FSRVPUFrame2Depth", ResourceFormat::R32_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
     m_pGeoMvFromFile = LoadTextureFromFile(
-        L"..\\media\\GeoMv.jpg", L"FSRVPUFrame1GeoMv", ResourceFormat::RG16_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
+        L"..\\media\\GeoMv.png", L"FSRVPUFrame1GeoMv", ResourceFormat::RG16_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
     m_pOptMvFromFile = LoadTextureFromFile(
-        L"..\\media\\OptMf.jpg", L"FSRVPUFrame1OptMv", ResourceFormat::RG16_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
+        L"..\\media\\OptMf.png", L"FSRVPUFrame1OptMv", ResourceFormat::RG16_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
 
     // Get a CPU resource view that we'll use to map the render target to
     GetResourceViewAllocator()->AllocateCPURenderViews(&m_pRTResourceView);
