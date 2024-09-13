@@ -146,11 +146,11 @@ private:
 
     int32_t         m_UpscaleMethod   = Upscaler_FSRAPI;
     int32_t         m_UiUpscaleMethod = Upscaler_FSRAPI;
-    FSRScalePreset  m_CurScale        = FSRScalePreset::Quality;
-    FSRScalePreset  m_ScalePreset     = FSRScalePreset::Quality;
+    FSRScalePreset  m_CurScale        = FSRScalePreset::NativeAA;
+    FSRScalePreset  m_ScalePreset     = FSRScalePreset::NativeAA;
     float           m_UpscaleRatio    = 2.f;
     float           m_LetterboxRatio  = 1.f;
-    float           m_MipBias         = cMipBias[static_cast<uint32_t>(FSRScalePreset::Quality)];
+    float           m_MipBias         = cMipBias[static_cast<uint32_t>(FSRScalePreset::NativeAA)];
     FSRMaskMode     m_MaskMode        = FSRMaskMode::Manual;
     float           m_Sharpness       = 0.8f;
     uint32_t        m_JitterIndex     = 0;
@@ -170,12 +170,12 @@ private:
     bool m_EnableAsyncCompute                       = true;
     bool m_AllowAsyncCompute                        = true;
     bool m_PendingEnableAsyncCompute                = true;
-    bool m_UseCallback                              = true;
+    bool m_UseCallback                              = false;
     bool m_DrawFrameGenerationDebugTearLines        = true;
     bool m_DrawFrameGenerationDebugResetIndicators  = true;
-    bool m_DrawFrameGenerationDebugView             = false;
+    bool m_DrawFrameGenerationDebugView             = true;
     bool m_DrawUpscalerDebugView                    = false;
-    bool m_PresentInterpolatedOnly                  = false;
+    bool m_PresentInterpolatedOnly                  = true;
     bool m_SimulatePresentSkip                      = false;
     bool m_ResetUpscale                             = false;
     bool m_ResetFrameInterpolation                  = false;

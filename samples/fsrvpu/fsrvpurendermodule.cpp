@@ -18,12 +18,17 @@
 #include <ffx_api/dx12/ffx_api_dx12.hpp>
 #include "render/dx12/device_dx12.h"
 #include "render/dx12/commandlist_dx12.h"
+#include "render/dx12/gpuresource_dx12.h"
+#include "dxheaders/include/directx/d3dx12.h"
 #elif defined(FFX_API_VK)
 #include <ffx_api/vk/ffx_api_vk.hpp>
 #include "render/vk/device_vk.h"
 #include "render/vk/commandlist_vk.h"
 #include "render/vk/swapchain_vk.h"
 #endif  // FFX_API_DX12
+
+#include "stb/stb_image.h"
+#include "stb/stb_image_write.h"
 
 #include <functional>
 #include <experimental/filesystem>
@@ -33,9 +38,12 @@ using namespace cauldron;
 
 void RestoreApplicationSwapChain(bool recreateSwapchain = true);
 
-void LoadTextureFromFile(const std::wstring& path, const std::wstring& name, ResourceFormat format, ResourceFlags flags)
+Texture* LoadTextureFromFile(const std::wstring& path, const std::wstring& name, ResourceFormat format, ResourceFlags flags)
 {
-    TextureLoadInfo loadInfo = TextureLoadInfo(path, true, 1.0f, flags);
+    TextureLoadInfo loadInfo = TextureLoadInfo(path, 
+        ((format == ResourceFormat::RG16_FLOAT) | (format == ResourceFormat::R32_FLOAT)) ? false : true,
+        1.0f,
+        flags);
 
     bool fileExists = experimental::filesystem::exists(loadInfo.TextureFile);
     CauldronAssert(ASSERT_ERROR,
@@ -79,28 +87,87 @@ void LoadTextureFromFile(const std::wstring& path, const std::wstring& name, Res
             {
                 pNewTexture->CopyData(pTextureData);
 
-                // Start managing the texture at this point
-                bool emplaced = GetContentManager()->StartManagingContent(texDesc.Name, pNewTexture);
-
-                // If it was emplaced, need to queue it up for a transition during the first graphics cmd list
-                if (emplaced)
-                {
-                    // Now that the resource is ready, queue the resource change on the graphics queue for the next time it executes
-                    Barrier textureTransition = Barrier::Transition(
-                        pNewTexture->GetResource(), ResourceState::CopyDest, ResourceState::PixelShaderResource | ResourceState::NonPixelShaderResource);
-                    GetDevice()->ExecuteResourceTransitionImmediate(1, &textureTransition);
-                }
-
-                // if it wasn't emplaced, it's a duplicate and we can just delete it (callback will be called with previously loaded asset)
-                else
-                {
-                    delete pNewTexture;
-                }
+                Barrier textureTransition = Barrier::Transition(
+                    pNewTexture->GetResource(), ResourceState::CopyDest, ResourceState::PixelShaderResource | ResourceState::NonPixelShaderResource);
+                GetDevice()->ExecuteResourceTransitionImmediate(1, &textureTransition);
             }
+
+            return pNewTexture;
         }
 
         delete pTextureData;
     }
+
+    return nullptr;
+}
+
+void SaveTextureToFile(const std::wstring& path, GPUResource* pTextureResource)
+{
+    const Texture*      pTexture = pTextureResource->GetTextureResource();
+    D3D12_RESOURCE_DESC fromDesc            = pTextureResource->GetImpl()->DX12Desc();
+
+    CD3DX12_HEAP_PROPERTIES readBackHeapProperties(D3D12_HEAP_TYPE_READBACK);
+
+    D3D12_RESOURCE_DESC bufferDesc = {};
+    bufferDesc.Alignment           = 0;
+    bufferDesc.DepthOrArraySize    = 1;
+    bufferDesc.Dimension           = D3D12_RESOURCE_DIMENSION_BUFFER;
+    bufferDesc.Flags               = D3D12_RESOURCE_FLAG_NONE;
+    bufferDesc.Format              = DXGI_FORMAT_UNKNOWN;
+    bufferDesc.Height              = 1;
+    bufferDesc.Width               = fromDesc.Width * fromDesc.Height * GetResourceFormatStride(pTexture->GetFormat());
+    bufferDesc.Layout              = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    bufferDesc.MipLevels           = 1;
+    bufferDesc.SampleDesc.Count    = 1;
+    bufferDesc.SampleDesc.Quality  = 0;
+
+    ID3D12Resource* pResourceReadBack = nullptr;
+    GetDevice()->GetImpl()->DX12Device()->CreateCommittedResource(
+        &readBackHeapProperties, D3D12_HEAP_FLAG_NONE, &bufferDesc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&pResourceReadBack));
+
+    CommandList* pCmdList = GetDevice()->CreateCommandList(L"SwapchainToFileCL", CommandQueue::Graphics);
+    Barrier      barrier  = Barrier::Transition(pTextureResource, ResourceState::Present, ResourceState::CopySource);
+    ResourceBarrier(pCmdList, 1, &barrier);
+
+    D3D12_PLACED_SUBRESOURCE_FOOTPRINT layout[1]             = {0};
+    uint32_t                           num_rows[1]           = {0};
+    UINT64                             row_sizes_in_bytes[1] = {0};
+    UINT64                             uploadHeapSize        = 0;
+    GetDevice()->GetImpl()->DX12Device()->GetCopyableFootprints(&fromDesc, 0, 1, 0, layout, num_rows, row_sizes_in_bytes, &uploadHeapSize);
+
+    CD3DX12_TEXTURE_COPY_LOCATION copyDest(pResourceReadBack, layout[0]);
+    CD3DX12_TEXTURE_COPY_LOCATION copySrc(pTextureResource->GetImpl()->DX12Resource(), 0);
+    pCmdList->GetImpl()->DX12CmdList()->CopyTextureRegion(&copyDest, 0, 0, 0, &copySrc, nullptr);
+
+    ID3D12Fence* pFence;
+    CauldronThrowOnFail(GetDevice()->GetImpl()->DX12Device()->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&pFence)));
+    CauldronThrowOnFail(GetDevice()->GetImpl()->DX12CmdQueue(CommandQueue::Graphics)->Signal(pFence, 1));
+    CauldronThrowOnFail(pCmdList->GetImpl()->DX12CmdList()->Close());
+
+    ID3D12CommandList* CmdListList[] = {pCmdList->GetImpl()->DX12CmdList()};
+    GetDevice()->GetImpl()->DX12CmdQueue(CommandQueue::Graphics)->ExecuteCommandLists(1, CmdListList);
+
+    // Wait for fence
+    HANDLE mHandleFenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+    pFence->SetEventOnCompletion(1, mHandleFenceEvent);
+    WaitForSingleObject(mHandleFenceEvent, INFINITE);
+    CloseHandle(mHandleFenceEvent);
+    pFence->Release();
+
+    UINT64*     pTimingsBuffer = NULL;
+    D3D12_RANGE range;
+    range.Begin = 0;
+    range.End   = uploadHeapSize;
+    pResourceReadBack->Map(0, &range, reinterpret_cast<void**>(&pTimingsBuffer));
+    stbi_write_jpg(WStringToString(path.c_str()).c_str(), (int)fromDesc.Width, (int)fromDesc.Height, 4, pTimingsBuffer, 100);
+    pResourceReadBack->Unmap(0, NULL);
+
+    GetDevice()->FlushAllCommandQueues();
+
+    // Release
+    pResourceReadBack->Release();
+    pResourceReadBack = nullptr;
+    delete pCmdList;
 }
 
 void FSRVPUModule::Init(const json& initData)
@@ -112,19 +179,6 @@ void FSRVPUModule::Init(const json& initData)
     CauldronAssert(ASSERT_CRITICAL, m_pTransRenderModule, L"FidelityFX FSR Sample: Error: Could not find Translucency render module.");
     CauldronAssert(ASSERT_CRITICAL, m_pToneMappingRenderModule, L"FidelityFX FSR Sample: Error: Could not find Tone Mapping render module.");
 
-    LoadTextureFromFile(L"..\\media\\frame0.jpg", L"FSRVPUFrame1", 
-        ResourceFormat::RGBA8_SNORM, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
-    LoadTextureFromFile(L"..\\media\\frame1.jpg", L"FSRVPUFrame2", 
-        ResourceFormat::RGBA8_SNORM, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
-    LoadTextureFromFile(L"..\\media\\depth0.jpg", L"FSRVPUFrame1Depth",
-        ResourceFormat::R32_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
-    LoadTextureFromFile(L"..\\media\\depth1.jpg", L"FSRVPUFrame2Depth", 
-        ResourceFormat::R32_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
-    LoadTextureFromFile(L"..\\media\\GeoMv.jpg", L"FSRVPUFrame1GeoMv",
-        ResourceFormat::RG16_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
-    LoadTextureFromFile(L"..\\media\\OptMf.jpg", L"FSRVPUFrame1OptMv", 
-        ResourceFormat::RG16_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
-
     // Fetch needed resources
     m_pColorTarget           = GetFramework()->GetColorTargetForCallback(GetName());
     m_pTonemappedColorTarget = GetFramework()->GetRenderTexture(L"SwapChainProxy");
@@ -134,12 +188,18 @@ void FSRVPUModule::Init(const json& initData)
     m_pCompositionMask       = GetFramework()->GetRenderTexture(L"TransCompMask");
     CauldronAssert(ASSERT_CRITICAL, m_pMotionVectors && m_pReactiveMask && m_pCompositionMask, L"Could not get one of the needed resources for FSR Rendermodule.");
 
-    m_pColF1FromFile = GetContentManager()->GetTexture(L"FSRVPUFrame1");
-    m_pColF2FromFile = GetContentManager()->GetTexture(L"FSRVPUFrame2");
-    m_pDepF1FromFile = GetContentManager()->GetTexture(L"FSRVPUFrame1Depth");
-    m_pDepF2FromFile = GetContentManager()->GetTexture(L"FSRVPUFrame2Depth");
-    m_pGeoMvFromFile = GetContentManager()->GetTexture(L"FSRVPUFrame1GeoMv");
-    m_pOptMvFromFile = GetContentManager()->GetTexture(L"FSRVPUFrame1OptMv");
+    m_pColF1FromFile = LoadTextureFromFile(
+        L"..\\media\\frame0.jpg", L"FSRVPUFrame1", ResourceFormat::RGBA8_SNORM, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
+    m_pColF2FromFile = LoadTextureFromFile(
+        L"..\\media\\frame1.jpg", L"FSRVPUFrame2", ResourceFormat::RGBA8_SNORM, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
+    m_pDepF1FromFile = LoadTextureFromFile(
+        L"..\\media\\depth0.jpg", L"FSRVPUFrame1Depth", ResourceFormat::R32_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
+    m_pDepF2FromFile = LoadTextureFromFile(
+        L"..\\media\\depth1.jpg", L"FSRVPUFrame2Depth", ResourceFormat::R32_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
+    m_pGeoMvFromFile = LoadTextureFromFile(
+        L"..\\media\\GeoMv.jpg", L"FSRVPUFrame1GeoMv", ResourceFormat::RG16_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
+    m_pOptMvFromFile = LoadTextureFromFile(
+        L"..\\media\\OptMf.jpg", L"FSRVPUFrame1OptMv", ResourceFormat::RG16_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
 
     // Get a CPU resource view that we'll use to map the render target to
     GetResourceViewAllocator()->AllocateCPURenderViews(&m_pRTResourceView);
@@ -346,6 +406,13 @@ void FSRVPUModule::Init(const json& initData)
 
 FSRVPUModule::~FSRVPUModule()
 {
+    delete m_pColF1FromFile;
+    delete m_pColF2FromFile;
+    delete m_pDepF1FromFile;
+    delete m_pDepF2FromFile;
+    delete m_pGeoMvFromFile;
+    delete m_pOptMvFromFile;
+
     // Destroy the FSR context
     UpdateFSRContext(false);
 
@@ -977,6 +1044,9 @@ void FSRVPUModule::Execute(double deltaTime, CommandList* pCmdList)
         // Native, nothing to do
     }
 
+    const Texture* pColorFSRVPUInput = m_FrameID % 2 == 0 ? m_pColF1FromFile : m_pColF2FromFile;
+    const Texture* pDepthFSRVPUInput = m_FrameID % 2 == 0 ? m_pDepF1FromFile : m_pDepF2FromFile;
+        
     if (m_UpscaleMethod == Upscaler_FSRAPI)
     {
         // FFXAPI
@@ -988,12 +1058,13 @@ void FSRVPUModule::Execute(double deltaTime, CommandList* pCmdList)
 #elif defined(FFX_API_VK)
         dispatchUpscale.commandList = pCmdList->GetImpl()->VKCmdBuffer();
 #endif  // defined(FFX_API_DX12)
-        /*dispatchUpscale.color    = SDKWrapper::ffxGetResourceApi(m_pTempTexture->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
+        /*dispatchUpscale.color       = SDKWrapper::ffxGetResourceApi(m_pTempTexture->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
         dispatchUpscale.depth         = SDKWrapper::ffxGetResourceApi(m_pDepthTarget->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
         dispatchUpscale.motionVectors = SDKWrapper::ffxGetResourceApi(m_pMotionVectors->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
         dispatchUpscale.exposure      = SDKWrapper::ffxGetResourceApi(nullptr, FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);*/
-        dispatchUpscale.color = SDKWrapper::ffxGetResourceApi(m_pColF1FromFile->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
-        dispatchUpscale.depth = SDKWrapper::ffxGetResourceApi(m_pDepF1FromFile->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
+        
+        dispatchUpscale.color = SDKWrapper::ffxGetResourceApi(pColorFSRVPUInput->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
+        dispatchUpscale.depth = SDKWrapper::ffxGetResourceApi(pDepthFSRVPUInput->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
         dispatchUpscale.motionVectors = SDKWrapper::ffxGetResourceApi(m_pGeoMvFromFile->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
         dispatchUpscale.exposure = SDKWrapper::ffxGetResourceApi(nullptr, FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
         dispatchUpscale.output        = SDKWrapper::ffxGetResourceApi(m_pColorTarget->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
@@ -1063,8 +1134,12 @@ void FSRVPUModule::Execute(double deltaTime, CommandList* pCmdList)
 #elif defined(FFX_API_VK)
     dispatchFgPrep.commandList   = pCmdList->GetImpl()->VKCmdBuffer();
 #endif  // defined(FFX_API_DX12)
+    /*
     dispatchFgPrep.depth = SDKWrapper::ffxGetResourceApi(m_pDepthTarget->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
     dispatchFgPrep.motionVectors = SDKWrapper::ffxGetResourceApi(m_pMotionVectors->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
+    */
+    dispatchFgPrep.depth         = SDKWrapper::ffxGetResourceApi(pDepthFSRVPUInput->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
+    dispatchFgPrep.motionVectors = SDKWrapper::ffxGetResourceApi(m_pGeoMvFromFile->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
     dispatchFgPrep.flags = 0;
     
     dispatchFgPrep.jitterOffset.x      = -m_JitterX;
@@ -1160,7 +1235,7 @@ void FSRVPUModule::Execute(double deltaTime, CommandList* pCmdList)
     {
         ffx::DispatchDescFrameGeneration dispatchFg{};
 
-        dispatchFg.presentColor       = backbuffer;
+        dispatchFg.presentColor = backbuffer;
         dispatchFg.numGeneratedFrames = 1;
 
         // assume symmetric letterbox
@@ -1192,9 +1267,45 @@ void FSRVPUModule::Execute(double deltaTime, CommandList* pCmdList)
 
         retCode = ffx::Dispatch(m_FrameGenContext, dispatchFg);
         CauldronAssert(ASSERT_CRITICAL, !!retCode, L"Dispatching Frame Generation failed: %d", (uint32_t)retCode);
+
+        if (m_FrameID == 1)
+        {
+            /*
+            auto headed = ffx::LinkHeaders(dispatchFg.header);
+
+            FfxApiResource FSRVPUOutput        = ffx::DynamicCast<ffxDispatchDescFrameGeneration>(headed)->outputs[0];
+            ResourceState FSRVPUResourceState = SDKWrapper::GetFrameworkState((FfxResourceStates)FSRVPUOutput.state);
+            TextureDesc    FSRVPUDesc          = SDKWrapper::GetFrameworkTextureDescription(FSRVPUOutput.description);
+            GPUResource*   FSRVPUOutputTexture = GPUResource::GetWrappedResourceFromSDK(L"FSRVPUOutput", &FSRVPUOutput, &FSRVPUDesc, FSRVPUResourceState);
+
+            std::vector<Barrier> barriers;
+            barriers = {Barrier::Transition(FSRVPUOutputTexture, FSRVPUResourceState, ResourceState::CopyDest)};
+            ResourceBarrier(pCmdList, (uint32_t)barriers.size(), barriers.data());
+            
+            SaveTextureToFile(L"../media/Out.jpg", m_pColorTarget->GetResource());
+            cauldron::GetSwapChain()->DumpSwapChainToFile(L"../media/Out.jpg");
+            */
+        }
     }
 
+    /*
+    ResourceState bbResourceState = SDKWrapper::GetFrameworkState((FfxResourceStates)backbuffer.state);
+    TextureDesc bbDesc = SDKWrapper::GetFrameworkTextureDescription(backbuffer.description);
+
+    GPUResource* pBBResource = GPUResource::GetWrappedResourceFromSDK(L"BackBuffer", backbuffer.resource, &bbDesc, bbResourceState);
+
+    TextureCopyDesc copyColor = TextureCopyDesc(pColorFSRVPUInput->GetResource(), pBBResource);
+    CopyTextureRegion(pCmdList, &copyColor);
+
+    std::vector<Barrier> barriers;
+    barriers.clear();
+    barriers.push_back(Barrier::Transition(pColorFSRVPUInput->GetResource(), ResourceState::CopySource, ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource));
+    barriers.push_back(Barrier::Transition(pBBResource, ResourceState::CopyDest, ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource));
+    ResourceBarrier(pCmdList, static_cast<uint32_t>(barriers.size()), barriers.data());
+    */
+    
     m_FrameID += uint64_t(1 + m_SimulatePresentSkip);
+
     m_SimulatePresentSkip = false;
 
     m_ResetUpscale = false;
@@ -1202,7 +1313,7 @@ void FSRVPUModule::Execute(double deltaTime, CommandList* pCmdList)
 
     // FidelityFX contexts modify the set resource view heaps, so set the cauldron one back
     SetAllResourceViewHeaps(pCmdList);
-
+    
     // We are now done with upscaling
     GetFramework()->SetUpscalingState(UpscalerState::PostUpscale);
 }
