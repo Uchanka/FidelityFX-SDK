@@ -491,7 +491,8 @@ namespace cauldron
             {
                 char* pPixel = (tempData + (h * texDesc.Width + w));
                 float val = pPixel[0] / 255.0f;
-                m_pData[h * texDesc.Width + w] = val;
+                float* pPixel32 = reinterpret_cast<float*>(m_pData + (h * texDesc.Width + w) * 4);
+                pPixel32[0] = val;
             }
         }
 
