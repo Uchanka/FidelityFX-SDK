@@ -52,7 +52,7 @@ Texture* LoadTextureFromFile(const std::wstring& path, const std::wstring& name,
     else if (format == ResourceFormat::RG16_FLOAT)
         typeOfFile = Motion;
     
-    TextureLoadInfo loadInfo = TextureLoadInfo(path, typeOfFile == Color ? true : false, 1.0f, flags);
+    TextureLoadInfo loadInfo = TextureLoadInfo(path, false, 1.0f, flags);
 
     bool fileExists = experimental::filesystem::exists(loadInfo.TextureFile);
     CauldronAssert(ASSERT_ERROR,
@@ -77,7 +77,7 @@ Texture* LoadTextureFromFile(const std::wstring& path, const std::wstring& name,
             switch (typeOfFile)
             {
             case Color:
-                pTextureData = new WICTextureDataBlock();
+                pTextureData = new ColorTextureDataBlock();
                 break;
             case Depth:
                 pTextureData = new DepthTextureDataBlock();
@@ -97,15 +97,13 @@ Texture* LoadTextureFromFile(const std::wstring& path, const std::wstring& name,
         {
             // We'll use a name that we know this time for sure
             texDesc.Name = name;
-
             texDesc.Format = format;
-
             // Pass along resource flags
             texDesc.Flags = static_cast<ResourceFlags>(loadInfo.Flags);
-
             // If SRGB was requested, apply format conversion
             if (loadInfo.SRGB)
                 texDesc.Format = ToGamma(texDesc.Format);
+            texDesc.MipLevels = 1;
 
             Texture* pNewTexture = Texture::CreateContentTexture(&texDesc);
             CauldronAssert(ASSERT_ERROR, pNewTexture != nullptr, L"Could not create the texture %ls", texDesc.Name.c_str());
@@ -215,9 +213,9 @@ void FSRVPUModule::Init(const json& initData)
     CauldronAssert(ASSERT_CRITICAL, m_pMotionVectors && m_pReactiveMask && m_pCompositionMask, L"Could not get one of the needed resources for FSR Rendermodule.");
 
     m_pColF1FromFile = LoadTextureFromFile(
-        L"..\\media\\Color0.png", L"FSRVPUFrame1", ResourceFormat::RGBA8_SNORM, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
+        L"..\\media\\Color0.png", L"FSRVPUFrame1", ResourceFormat::RGBA8_UNORM, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
     m_pColF2FromFile = LoadTextureFromFile(
-        L"..\\media\\Color1.png", L"FSRVPUFrame2", ResourceFormat::RGBA8_SNORM, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
+        L"..\\media\\Color1.png", L"FSRVPUFrame2", ResourceFormat::RGBA8_UNORM, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
     m_pDepF1FromFile = LoadTextureFromFile(
         L"..\\media\\Depth0.png", L"FSRVPUFrame1Depth", ResourceFormat::R32_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
     m_pDepF2FromFile = LoadTextureFromFile(

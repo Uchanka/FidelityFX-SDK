@@ -329,80 +329,147 @@ namespace cauldron
         MipImage(bytesWidth / 4, height);
     }
 
-// Whatever for the Depth
-
-    DepthTextureDataBlock::~DepthTextureDataBlock()
+    // Whatever for the Color
+    ColorTextureDataBlock::~ColorTextureDataBlock()
     {
         if (m_pData)
             free(m_pData);
     }
 
-    float DepthTextureDataBlock::GetAlphaCoverage(uint32_t width, uint32_t height, float scale, uint32_t alphaThreshold) const
+    uint32_t encode_f11(uint8_t value)
     {
-        double value = 0.0;
+        float val = value / 255.0f;
+        uint32_t numBits;
+        std::memcpy(&numBits, &val, sizeof(val));
 
-        uint32_t* pImgData = reinterpret_cast<uint32_t*>(m_pData);
+        int32_t  exponent = ((numBits >> 23) & 0xFF) - 127;  // Extract exponent and adjust bias
+        uint32_t mantissa = (numBits & 0x7FFFFF);            // Extract mantissa
+        exponent          = exponent + (15 - (-127 + 127));
 
-        for (uint32_t y = 0; y < height; ++y)
+        int maxExponent = (1 << 5) - 1;  // Maximum value with 5 bits
+        if (exponent > maxExponent)
         {
-            for (uint32_t x = 0; x < width; ++x)
-            {
-                uint8_t* pPixel = reinterpret_cast<uint8_t*>(pImgData++);
-                uint32_t alpha  = static_cast<uint32_t>(scale * (float)pPixel[3]);
-                if (alpha > 255)
-                    alpha = 255;
-                if (alpha <= alphaThreshold)
-                    continue;
-
-                value += alpha;
-            }
+            exponent = maxExponent;
+        }
+        else if (exponent < 0)
+        {
+            exponent = 0;
         }
 
-        return static_cast<float>(value / (height * width * 255));
+         // Extract and round the 6 most significant bits of the mantissa
+        uint32_t newMantissa = (mantissa >> 17);        // Shift to get the most significant 6 bits
+        bool     roundBit    = (mantissa >> 16) & 0x1;  // Check the next bit for possible rounding
+        if (roundBit)
+        {
+            newMantissa += 1;  // Simple rounding; could overflow into exponent, not handled here
+        }
+
+        // Limit mantissa to 6 bits in case of rounding overflow
+        newMantissa &= 0x3F;
+
+        uint32_t result = (exponent << 6) | newMantissa;
+        return result;
     }
 
-    void DepthTextureDataBlock::ScaleAlpha(uint32_t width, uint32_t height, float scale)
+    uint32_t encode_f10(uint8_t value)
     {
-        uint32_t* pImgData = reinterpret_cast<uint32_t*>(m_pData);
+        float    val = value / 255.0f;
+        uint32_t numBits;
+        std::memcpy(&numBits, &val, sizeof(val));
 
-        for (uint32_t y = 0; y < height; ++y)
+        int32_t  exponent = ((numBits >> 23) & 0xFF) - 127;  // Extract exponent and adjust bias
+        uint32_t mantissa = (numBits & 0x7FFFFF);            // Extract mantissa
+        exponent          = exponent + (15 - (-127 + 127));
+
+        int maxExponent = (1 << 5) - 1;  // Maximum value with 5 bits
+        if (exponent > maxExponent)
         {
-            for (uint32_t x = 0; x < width; ++x)
-            {
-                uint8_t* pPixel = reinterpret_cast<uint8_t*>(pImgData++);
-
-                int32_t alpha = (int)(scale * (float)pPixel[3]);
-                if (alpha > 255)
-                    alpha = 255;
-
-                pPixel[3] = alpha;
-            }
+            exponent = maxExponent;
         }
+        else if (exponent < 0)
+        {
+            exponent = 0;
+        }
+
+        // Extract and round the 6 most significant bits of the mantissa
+        uint32_t newMantissa = (mantissa >> 18);        // Shift to get the most significant 6 bits
+        bool     roundBit    = (mantissa >> 17) & 0x1;  // Check the next bit for possible rounding
+        if (roundBit)
+        {
+            newMantissa += 1;  // Simple rounding; could overflow into exponent, not handled here
+        }
+
+        // Limit mantissa to 4 bits in case of rounding overflow
+        newMantissa &= 0xF;
+
+        uint32_t result = (exponent << 5) | newMantissa;
+        return result;
     }
 
-    void DepthTextureDataBlock::MipImage(uint32_t width, uint32_t height)
+    uint32_t packR11G11B10(uint8_t R_norm, uint8_t G_norm, uint8_t B_norm)
     {
-        //compute mip so next call gets the lower mip
-        int32_t offsetsX[] = {0, 1, 0, 1};
-        int32_t offsetsY[] = {0, 0, 1, 1};
+        // Encode red and green as 11 bits, and blue as 10 bits
+        uint32_t R11 = encode_f11(R_norm);
+        uint32_t G11 = encode_f11(G_norm);
+        uint32_t B10 = encode_f10(B_norm);
 
-        float* pImgData = reinterpret_cast<float*>(m_pData);
+        // Pack them into a single 32-bit value
+        uint32_t packed_value = (R11 << 21) | (G11 << 10) | B10;
+        return packed_value;
+    }
 
-#define GetByte(color, component) (((color) >> (8 * (component))) & 0xff)
-#define GetColor(ptr, x, y)       (ptr[(x) + (y) * width])
-#define SetColor(ptr, x, y, col)  ptr[(x) + (y) * width / 2] = col;
+    bool ColorTextureDataBlock::LoadTextureData(filesystem::path& textureFile, float alphaThreshold, TextureDesc& texDesc)
+    {
+        std::string fileName = textureFile.u8string();
 
-        for (uint32_t y = 0; y < height; y += 2)
+        int32_t channels;
+        m_pData = reinterpret_cast<char*>(
+            stbi_load(fileName.c_str(), reinterpret_cast<int32_t*>(&texDesc.Width), reinterpret_cast<int32_t*>(&texDesc.Height), &channels, STBI_rgb_alpha));
+
+        if (!m_pData)
+            return false;
+
+        // Some RGB channel rearrangement boogaloo idk
+        for (uint32_t h = 0; h < texDesc.Height; ++h)
         {
-            for (uint32_t x = 0; x < width; x += 2)
+            for (uint32_t w = 0; w < texDesc.Width; ++w)
             {
-                float avgDepth = 0.0f;
-                for (uint32_t i = 0; i < 4; ++i)
-                    avgDepth += GetColor(pImgData, x + offsetsX[i], y + offsetsY[i]);
-                avgDepth *= 0.25f;
-                SetColor(pImgData, x / 2, y / 2, avgDepth);
+                char*    pPixel = reinterpret_cast<char*>(m_pData + (h * texDesc.Width + w) * 4);
+                char     ch0    = pPixel[0] >= 0 ? pPixel[0] : 0;
+                char     ch1    = pPixel[1] >= 0 ? pPixel[1] : 0;
+                char     ch2    = pPixel[2] >= 0 ? pPixel[2] : 0;
+
+                //uint32_t  packed32Bits = packR11G11B10(ch0, ch1, ch2);
+                //uint32_t packed32Bits = (ch2 << 16) | (ch1 << 8) | ch0;
+                //uint32_t* pPixel32 = reinterpret_cast<uint32_t*>(m_pData + (h * texDesc.Width + w) * 4);
+                //*pPixel32 = packed32Bits;
+                pPixel[0] = ch0;
+                pPixel[1] = ch1;
+                pPixel[2] = ch2;
+                pPixel[3] = 255;
             }
         }
+
+        // Fill in remaining texture information
+        texDesc.DepthOrArraySize = 1;
+        texDesc.Format           = ResourceFormat::RGBA8_UNORM;
+        texDesc.Dimension        = TextureDimension::Texture2D;
+        texDesc.MipLevels        = 1;
+
+        return true;
+    }
+
+    void ColorTextureDataBlock::CopyTextureData(void* pDest, uint32_t stride, uint32_t bytesWidth, uint32_t height, uint32_t readOffset)
+    {
+        for (uint32_t y = 0; y < height; ++y)
+            memcpy((char*)pDest + y * stride, m_pData + y * bytesWidth, bytesWidth);
+    }
+
+    // Whatever for the Depth
+    DepthTextureDataBlock::~DepthTextureDataBlock()
+    {
+        if (m_pData)
+            free(m_pData);
     }
 
     bool DepthTextureDataBlock::LoadTextureData(filesystem::path& textureFile, float alphaThreshold, TextureDesc& texDesc)
@@ -428,29 +495,12 @@ namespace cauldron
             }
         }
 
-        // Compute number of mips
-        uint32_t mipWidth  = texDesc.Width;
-        uint32_t mipHeight = texDesc.Height;
-        texDesc.MipLevels  = 0;
-        for (;;)
-        {
-            ++texDesc.MipLevels;
-            if (mipWidth > 1)
-                mipWidth >>= 1;
-            if (mipHeight > 1)
-                mipHeight >>= 1;
-            if (mipWidth == 1 && mipHeight == 1)
-                break;
-        }
-
         // Fill in remaining texture information
         texDesc.DepthOrArraySize = 1;
-        texDesc.Format           = ResourceFormat::R32_FLOAT;
+        texDesc.Format           = ResourceFormat::D32_FLOAT;
         texDesc.Dimension        = TextureDimension::Texture2D;
+        texDesc.MipLevels        = 1;
 
-        // If there is an alpha threshold, compute the alpha test coverage of the top mip
-        // Mip generation will try to match this value so objects don't get thinner as they use lower mips
-        m_AlphaThreshold = 1.0f;
         free(tempData);
         return true;
     }
@@ -459,9 +509,6 @@ namespace cauldron
     {
         for (uint32_t y = 0; y < height; ++y)
             memcpy((char*)pDest + y * stride, m_pData + y * bytesWidth, bytesWidth);
-
-        // Generate the next mip in the chain to read
-        MipImage(bytesWidth / 4, height);
     }
 
     // Whatever for the MV
@@ -471,103 +518,75 @@ namespace cauldron
             free(m_pData);
     }
 
-    float MVTextureDataBlock::GetAlphaCoverage(uint32_t width, uint32_t height, float scale, uint32_t alphaThreshold) const
+    uint16_t float32ToHalf(float f)
     {
-        double value = 0.0;
+        uint32_t f32 = *reinterpret_cast<uint32_t*>(&f);
+        uint16_t f16 = 0;
 
-        uint32_t* pImgData = reinterpret_cast<uint32_t*>(m_pData);
+        uint32_t sign     = (f32 >> 31) & 0x1;
+        int32_t  exponent = ((f32 >> 23) & 0xFF) - 127 + 15;  // Adjust exponent bias
+        uint32_t mantissa = f32 & 0x7FFFFF;
 
-        for (uint32_t y = 0; y < height; ++y)
+        if (exponent <= 0)
         {
-            for (uint32_t x = 0; x < width; ++x)
-            {
-                uint8_t* pPixel = reinterpret_cast<uint8_t*>(pImgData++);
-                uint32_t alpha  = static_cast<uint32_t>(scale * (float)pPixel[3]);
-                if (alpha > 255)
-                    alpha = 255;
-                if (alpha <= alphaThreshold)
-                    continue;
-
-                value += alpha;
-            }
+            // Subnormal or zero
+            f16 = (sign << 15);
+        }
+        else if (exponent >= 0x1F)
+        {
+            // Overflow, set to infinity
+            f16 = (sign << 15) | (0x1F << 10);
+        }
+        else
+        {
+            // Normal case
+            f16 = (sign << 15) | (exponent << 10) | (mantissa >> 13);
         }
 
-        return static_cast<float>(value / (height * width * 255));
+        return f16;
     }
 
-    void MVTextureDataBlock::ScaleAlpha(uint32_t width, uint32_t height, float scale)
+    // Convert a 16-bit half-precision float to a 32-bit float
+    float HalfToFloat32(uint16_t half)
     {
-        uint32_t* pImgData = reinterpret_cast<uint32_t*>(m_pData);
+        uint32_t sign     = (half >> 15) & 0x1;   // Extract sign (1 bit)
+        uint32_t exponent = (half >> 10) & 0x1F;  // Extract exponent (5 bits)
+        uint32_t mantissa = half & 0x3FF;         // Extract mantissa (10 bits)
 
-        for (uint32_t y = 0; y < height; ++y)
+        uint32_t f32Sign = sign << 31;  // Sign bit in float32 is at bit 31
+        uint32_t f32Exponent, f32Mantissa;
+
+        if (exponent == 0)
         {
-            for (uint32_t x = 0; x < width; ++x)
+            if (mantissa == 0)
             {
-                uint8_t* pPixel = reinterpret_cast<uint8_t*>(pImgData++);
-
-                int32_t alpha = (int)(scale * (float)pPixel[3]);
-                if (alpha > 255)
-                    alpha = 255;
-
-                pPixel[3] = alpha;
+                // Zero (both +0 and -0)
+                f32Exponent = 0;
+                f32Mantissa = 0;
+            }
+            else
+            {
+                // Subnormal number
+                f32Exponent = 0;
+                f32Mantissa = mantissa << 13;  // Normalize mantissa for float32
             }
         }
-    }
-
-    void MVTextureDataBlock::MipImage(uint32_t width, uint32_t height)
-    {
-        //compute mip so next call gets the lower mip
-        int32_t offsetsX[] = {0, 1, 0, 1};
-        int32_t offsetsY[] = {0, 0, 1, 1};
-
-        uint32_t* pImgData = reinterpret_cast<uint32_t*>(m_pData);
-
-#define GetByte(color, component) (((color) >> (8 * (component))) & 0xff)
-#define GetColor(ptr, x, y)       (ptr[(x) + (y) * width])
-#define SetColor(ptr, x, y, col)  ptr[(x) + (y) * width / 2] = col;
-
-        for (uint32_t y = 0; y < height; y += 2)
+        else if (exponent == 0x1F)
         {
-            for (uint32_t x = 0; x < width; x += 2)
-            {
-                uint32_t ccc = 0;
-                for (uint32_t c = 0; c < 4; ++c)
-                {
-                    uint32_t cc = 0;
-                    for (uint32_t i = 0; i < 4; ++i)
-                        cc += GetByte(GetColor(pImgData, x + offsetsX[i], y + offsetsY[i]), 3 - c);
-
-                    ccc = (ccc << 8) | (cc / 4);
-                }
-                SetColor(pImgData, x / 2, y / 2, ccc);
-            }
+            // Inf or NaN
+            f32Exponent = 0xFF << 23;
+            f32Mantissa = mantissa ? (mantissa << 13) | 0x400000 : 0;  // NaN or Inf
+        }
+        else
+        {
+            // Normalized number
+            f32Exponent = (exponent + 127 - 15) << 23;  // Adjust exponent bias from 15 to 127
+            f32Mantissa = mantissa << 13;               // Shift mantissa to float32 position
         }
 
-        // For cutouts we need to scale the alpha channel to match the coverage of the top MIP map
-        // otherwise cutouts seem to get thinner when smaller mips are used
-        // Credits: http://www.ludicon.com/castano/blog/articles/computing-alpha-mipmaps/
-        if (m_AlphaTestCoverage < 1.0)
-        {
-            float ini = 0;
-            float fin = 10;
-            float mid;
-            float alphaPercentage;
-            int   iter = 0;
-            for (; iter < 50; iter++)
-            {
-                mid             = (ini + fin) / 2;
-                alphaPercentage = GetAlphaCoverage(width / 2, height / 2, mid, (int)(m_AlphaThreshold * 255));
-
-                if (fabs(alphaPercentage - m_AlphaTestCoverage) < .001)
-                    break;
-
-                if (alphaPercentage > m_AlphaTestCoverage)
-                    fin = mid;
-                if (alphaPercentage < m_AlphaTestCoverage)
-                    ini = mid;
-            }
-            ScaleAlpha(width / 2, height / 2, mid);
-        }
+        // Combine sign, exponent, and mantissa into a single 32-bit float representation
+        uint32_t f32Bits = f32Sign | f32Exponent | f32Mantissa;
+        return *reinterpret_cast<float*>(&f32Bits);
     }
 
     bool MVTextureDataBlock::LoadTextureData(filesystem::path& textureFile, float alphaThreshold, TextureDesc& texDesc)
@@ -575,40 +594,37 @@ namespace cauldron
         std::string fileName = textureFile.u8string();
 
         int32_t channels;
-        m_pData = reinterpret_cast<char*>(
-            stbi_load(fileName.c_str(), reinterpret_cast<int32_t*>(&texDesc.Width), reinterpret_cast<int32_t*>(&texDesc.Height), &channels, STBI_rgb_alpha));
-
-        if (!m_pData)
+        char* tempData = reinterpret_cast<char*>(
+            stbi_load(fileName.c_str(), reinterpret_cast<int32_t*>(&texDesc.Width), reinterpret_cast<int32_t*>(&texDesc.Height), &channels, STBI_grey_alpha));
+        if (!tempData)
             return false;
 
-        // Compute number of mips
-        uint32_t mipWidth  = texDesc.Width;
-        uint32_t mipHeight = texDesc.Height;
-        texDesc.MipLevels  = 0;
-        for (;;)
+        // 16 + 16 = 32
+        m_pData = reinterpret_cast<char*>(new uint32_t[texDesc.Width * texDesc.Height]);
+
+        for (uint32_t h = 0; h < texDesc.Height; ++h)
         {
-            ++texDesc.MipLevels;
-            if (mipWidth > 1)
-                mipWidth >>= 1;
-            if (mipHeight > 1)
-                mipHeight >>= 1;
-            if (mipWidth == 1 && mipHeight == 1)
-                break;
+            for (uint32_t w = 0; w < texDesc.Width; ++w)
+            {
+                char* pPixel                   = (tempData + (h * texDesc.Width + w));
+                float valR                      = pPixel[0] / 255.0f;
+                float valG                      = pPixel[1] / 255.0f;
+                valR                            = (valR - 0.5f) * 2.0f;
+                valG                            = (0.5f - valG) * 2.0f;
+                uint16_t valR16Bit              = float32ToHalf(valR);
+                uint16_t valG16Bit              = float32ToHalf(valG);
+                uint32_t val                    = (valR16Bit << 16) | valG16Bit;
+                m_pData[h * texDesc.Width + w] = val;
+            }
         }
 
         // Fill in remaining texture information
         texDesc.DepthOrArraySize = 1;
-        texDesc.Format           = ResourceFormat::RGBA8_UNORM;
+        texDesc.Format           = ResourceFormat::RG16_FLOAT;
         texDesc.Dimension        = TextureDimension::Texture2D;
+        texDesc.MipLevels        = 1;
 
-        // If there is an alpha threshold, compute the alpha test coverage of the top mip
-        // Mip generation will try to match this value so objects don't get thinner as they use lower mips
-        m_AlphaThreshold = alphaThreshold;
-        if (m_AlphaThreshold < 1.0f)
-            m_AlphaTestCoverage = GetAlphaCoverage(texDesc.Width, texDesc.Height, 1.0f, (uint32_t)(255 * m_AlphaThreshold));
-        else
-            m_AlphaTestCoverage = 1.0f;
-
+        free(tempData);
         return true;
     }
 
@@ -616,9 +632,6 @@ namespace cauldron
     {
         for (uint32_t y = 0; y < height; ++y)
             memcpy((char*)pDest + y * stride, m_pData + y * bytesWidth, bytesWidth);
-
-        // Generate the next mip in the chain to read
-        MipImage(bytesWidth / 4, height);
     }
 
     // Needed for DDS loading
