@@ -570,7 +570,7 @@ namespace cauldron
         uint32_t B10 = encode_f10(B_norm);
 
         // Pack them into a single 32-bit value
-        uint32_t packed_value = (G11 << 21) | (R11 << 10) | B10;
+        uint32_t packed_value = (R11 << 21) | (G11 << 10) | B10;
         return packed_value;
     }
 
@@ -591,13 +591,14 @@ namespace cauldron
         {
             for (uint32_t w = 0; w < texDesc.Width; ++w)
             {
-                char*    pPixel = reinterpret_cast<char*>(tempData + (h * texDesc.Width + w) * 3);
-                char     ch0    = pPixel[0] >= 0 ? pPixel[0] : 0;
-                char     ch1    = pPixel[1] >= 0 ? pPixel[1] : 0;
-                char     ch2    = pPixel[2] >= 0 ? pPixel[2] : 0;
-                char     ch3    = 255;
+                uint8_t* pPixel = reinterpret_cast<uint8_t*>(tempData + (h * texDesc.Width + w) * 3);
+                uint8_t  r      = pPixel[0];
+                uint8_t  g      = pPixel[1];
+                uint8_t  b      = pPixel[2];
+                uint8_t  a      = 255;
 
-                uint32_t packed32Bits = packR11G11B10(ch0, ch1, ch2);
+                //uint32_t packed32Bits = packR11G11B10(ch0, ch1, ch2);
+                uint32_t packed32Bits = a << 24 | b << 16 | g << 8 | r;
                 uint32_t* pPixel32 = reinterpret_cast<uint32_t*>(m_pData + (h * texDesc.Width + w) * 4);
                 *pPixel32 = packed32Bits;
             }
@@ -605,7 +606,7 @@ namespace cauldron
 
         // Fill in remaining texture information
         texDesc.DepthOrArraySize = 1;
-        texDesc.Format           = ResourceFormat::RG11B10_FLOAT;
+        texDesc.Format           = ResourceFormat::RGBA8_UNORM;
         texDesc.Dimension        = TextureDimension::Texture2D;
         texDesc.MipLevels        = 1;
 

@@ -213,9 +213,9 @@ void FSRVPUModule::Init(const json& initData)
     CauldronAssert(ASSERT_CRITICAL, m_pMotionVectors && m_pReactiveMask && m_pCompositionMask, L"Could not get one of the needed resources for FSR Rendermodule.");
 
     m_pColF1FromFile = LoadTextureFromFile(
-        L"..\\media\\Color0.png", L"FSRVPUFrame1", ResourceFormat::RG11B10_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
+        L"..\\media\\Color0.png", L"FSRVPUFrame1", ResourceFormat::RGBA8_UNORM, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
     m_pColF2FromFile = LoadTextureFromFile(
-        L"..\\media\\Color1.png", L"FSRVPUFrame2", ResourceFormat::RG11B10_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
+        L"..\\media\\Color1.png", L"FSRVPUFrame2", ResourceFormat::RGBA8_UNORM, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
     m_pDepF1FromFile = LoadTextureFromFile(
         L"..\\media\\Depth0.png", L"FSRVPUFrame1Depth", ResourceFormat::R32_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
     m_pDepF2FromFile = LoadTextureFromFile(
@@ -1298,9 +1298,9 @@ void FSRVPUModule::Execute(double deltaTime, CommandList* pCmdList)
         FfxApiResource pOutputFg       = dispatchFg.outputs[0];
         ResourceState  rtResourceState = SDKWrapper::GetFrameworkState((FfxResourceStates)pOutputFg.state);
         TextureDesc    rtDesc          = SDKWrapper::GetFrameworkTextureDescription(pOutputFg.description);
-        GPUResource*   pOutput     = GPUResource::GetWrappedResourceFromSDK(L"UI_RenderTarget", pOutputFg.resource, &rtDesc, rtResourceState);
+        GPUResource*   pOutput     = GPUResource::GetWrappedResourceFromSDK(L"Whatever", pOutputFg.resource, &rtDesc, rtResourceState);
         
-        SaveTextureToFile(L"../media/Color01.png", pOutput);
+        SaveTextureToFile(L"../media/Color01.jpg", pOutput);
     }
 
     m_FrameID += uint64_t(1 + m_SimulatePresentSkip);
