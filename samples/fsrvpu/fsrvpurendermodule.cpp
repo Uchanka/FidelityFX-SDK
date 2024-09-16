@@ -127,7 +127,6 @@ Texture* LoadTextureFromFile(const std::wstring& path, const std::wstring& name,
 
 void SaveTextureToFile(const std::wstring& path, const GPUResource* pTextureResource)
 {
-    const Texture*      pTexture = pTextureResource->GetTextureResource();
     D3D12_RESOURCE_DESC fromDesc            = pTextureResource->GetImpl()->DX12Desc();
 
     CD3DX12_HEAP_PROPERTIES readBackHeapProperties(D3D12_HEAP_TYPE_READBACK);
@@ -139,7 +138,7 @@ void SaveTextureToFile(const std::wstring& path, const GPUResource* pTextureReso
     bufferDesc.Flags               = D3D12_RESOURCE_FLAG_NONE;
     bufferDesc.Format              = DXGI_FORMAT_UNKNOWN;
     bufferDesc.Height              = 1;
-    bufferDesc.Width               = fromDesc.Width * fromDesc.Height * 8;
+    bufferDesc.Width               = fromDesc.Width * fromDesc.Height * 4;
     //GetResourceFormatStride(fromDesc.Format);
     bufferDesc.Layout              = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
     bufferDesc.MipLevels           = 1;
@@ -214,9 +213,9 @@ void FSRVPUModule::Init(const json& initData)
     CauldronAssert(ASSERT_CRITICAL, m_pMotionVectors && m_pReactiveMask && m_pCompositionMask, L"Could not get one of the needed resources for FSR Rendermodule.");
 
     m_pColF1FromFile = LoadTextureFromFile(
-        L"..\\media\\Color0.png", L"FSRVPUFrame1", ResourceFormat::RGBA8_UNORM, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
+        L"..\\media\\Color0.png", L"FSRVPUFrame1", ResourceFormat::RG11B10_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
     m_pColF2FromFile = LoadTextureFromFile(
-        L"..\\media\\Color1.png", L"FSRVPUFrame2", ResourceFormat::RGBA8_UNORM, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
+        L"..\\media\\Color1.png", L"FSRVPUFrame2", ResourceFormat::RG11B10_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
     m_pDepF1FromFile = LoadTextureFromFile(
         L"..\\media\\Depth0.png", L"FSRVPUFrame1Depth", ResourceFormat::R32_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
     m_pDepF2FromFile = LoadTextureFromFile(
@@ -1071,13 +1070,14 @@ void FSRVPUModule::Execute(double deltaTime, CommandList* pCmdList)
 
     const Texture* pColorFSRVPUInput = m_FrameID % 2 == 0 ? m_pColF1FromFile : m_pColF2FromFile;
     const Texture* pDepthFSRVPUInput = m_FrameID % 2 == 0 ? m_pDepF1FromFile : m_pDepF2FromFile;
+    const Texture* pMotionFSRVPUInput = m_pGeoMvFromFile;
         
+    ffx::DispatchDescUpscale dispatchUpscale{};
     if (m_UpscaleMethod == Upscaler_FSRAPI)
     {
         // FFXAPI
         // All cauldron resources come into a render module in a generic read state (ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource)
-        ffx::DispatchDescUpscale dispatchUpscale{};
-
+        
 #if defined(FFX_API_DX12)
         dispatchUpscale.commandList = pCmdList->GetImpl()->DX12CmdList();
 #elif defined(FFX_API_VK)
@@ -1090,7 +1090,7 @@ void FSRVPUModule::Execute(double deltaTime, CommandList* pCmdList)
         
         dispatchUpscale.color = SDKWrapper::ffxGetResourceApi(pColorFSRVPUInput->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
         dispatchUpscale.depth = SDKWrapper::ffxGetResourceApi(pDepthFSRVPUInput->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
-        dispatchUpscale.motionVectors = SDKWrapper::ffxGetResourceApi(m_pGeoMvFromFile->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
+        dispatchUpscale.motionVectors = SDKWrapper::ffxGetResourceApi(pMotionFSRVPUInput->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
         dispatchUpscale.exposure = SDKWrapper::ffxGetResourceApi(nullptr, FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
         dispatchUpscale.output        = SDKWrapper::ffxGetResourceApi(m_pColorTarget->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
 
@@ -1256,10 +1256,9 @@ void FSRVPUModule::Execute(double deltaTime, CommandList* pCmdList)
 #endif  // defined(FFX_API_DX12)
 
     // Dispatch frame generation, if not using the callback
+    ffx::DispatchDescFrameGeneration dispatchFg{};
     if (m_FrameInterpolation && !m_UseCallback)
-    {
-        ffx::DispatchDescFrameGeneration dispatchFg{};
-
+    {    
         dispatchFg.presentColor = backbuffer;
         dispatchFg.numGeneratedFrames = 1;
 
@@ -1292,6 +1291,16 @@ void FSRVPUModule::Execute(double deltaTime, CommandList* pCmdList)
 
         retCode = ffx::Dispatch(m_FrameGenContext, dispatchFg);
         CauldronAssert(ASSERT_CRITICAL, !!retCode, L"Dispatching Frame Generation failed: %d", (uint32_t)retCode);
+    }
+
+    if (m_FrameID == 7)
+    {
+        FfxApiResource pOutputFg       = dispatchFg.outputs[0];
+        ResourceState  rtResourceState = SDKWrapper::GetFrameworkState((FfxResourceStates)pOutputFg.state);
+        TextureDesc    rtDesc          = SDKWrapper::GetFrameworkTextureDescription(pOutputFg.description);
+        GPUResource*   pOutput     = GPUResource::GetWrappedResourceFromSDK(L"UI_RenderTarget", pOutputFg.resource, &rtDesc, rtResourceState);
+        
+        SaveTextureToFile(L"../media/Color01.png", pOutput);
     }
 
     m_FrameID += uint64_t(1 + m_SimulatePresentSkip);

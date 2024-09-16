@@ -336,74 +336,230 @@ namespace cauldron
             free(m_pData);
     }
 
+    class FloatConversion
+    {
+    public:
+        const static int  DOUBLE_EXPONENT_BITS = 11;
+        const static long DOUBLE_EXPONENT_MASK = (1L << DOUBLE_EXPONENT_BITS) - 1;
+        const static long DOUBLE_EXPONENT_BIAS = 1023;
+        const static long DOUBLE_MANTISSA_MASK = (1L << 52) - 1;
+
+        static long doubleToSmallFloat(double d, boolean hasSign, int exponentBits, int mantissaBits)
+        {
+            long bits = *(reinterpret_cast<long*>(&d));
+
+            long s            = -(bits >> 63);
+            long e            = ((bits >> 52) & DOUBLE_EXPONENT_MASK) - DOUBLE_EXPONENT_BIAS;
+            long m            = bits & DOUBLE_MANTISSA_MASK;
+            int  exponentBias = (1 << (exponentBits - 1)) - 1;
+
+            if (!hasSign && d < 0)
+            {
+                //Handle negative NaN and clamp negative numbers when we don't have an output sign
+                if (e == 1024 && m != 0)
+                {
+                    return (((1 << exponentBits) - 1) << mantissaBits) | 1;  //Negative NaN
+                }
+                else
+                {
+                    return 0;  //negative value, clamp to 0.
+                }
+            }
+
+            long sign     = s;
+            long exponent = 0;
+            long mantissa = 0;
+
+            if (e <= -exponentBias)
+            {
+                long   val = bits & 0x7FFFFFFFFFFFFFFFL;
+                double abs = *(reinterpret_cast<double*>(&val));
+
+                //Value is too small, calculate an optimal denormal value.
+                exponent = 0;
+
+                int    denormalExponent = exponentBias + mantissaBits - 1;
+                val              = (denormalExponent + DOUBLE_EXPONENT_BIAS) << 52;
+                double multiplier       = *(reinterpret_cast<double*>(&val));
+
+                //Odd-even rounding
+                mantissa = (long)rint(abs * multiplier);
+            }
+            else if (e <= exponentBias)
+            {
+                //A value in the normal range of this format. We can convert the exponent and mantissa
+                //directly by changing the exponent bias and dropping the extra mantissa bits (with correct
+                //rounding to minimize the error).
+
+                exponent = e + exponentBias;
+
+                int  shift        = 52 - mantissaBits;
+                long mantissaBase = m >> shift;
+                long rounding     = (m >> (shift - 1)) & 1;
+                mantissa          = mantissaBase + rounding;
+
+                //Again, if we overflow the mantissa due to rounding to 1024, we want to round the result to
+                //up to infinity (exponent 31, mantissa 0). Through a stroke of luck, the code below
+                //is not actually needed due to how the mantissa bits overflow into the exponent bits,
+                //but it's here for clarity.
+                //exponent += mantissa >> 10;
+                //mantissa &= 0x3FF;
+            }
+            else
+            {
+                //We have 3 cases here:
+                // 1. exponent = 128 and mantissa != 0 ---> NaN
+                // 2. exponent = 128 and mantissa == 0 ---> Infinity
+                // 3. value is to big for a small-float---> Infinity
+                //So, if the value isn't NaN we want infinity.
+                exponent = (1 << exponentBits) - 1;
+                if (e == 1024 && m != 0)
+                {
+                    mantissa = 1;  //NaN
+                }
+                else
+                {
+                    mantissa = 0;  //infinity
+                }
+            }
+
+            if (hasSign)
+            {
+                return (sign << (mantissaBits + exponentBits)) + (exponent << mantissaBits) + mantissa;
+            }
+            else
+            {
+                return (exponent << mantissaBits) + mantissa;
+            }
+        }
+
+        static double smallFloatToDouble(long f, boolean hasSign, int exponentBits, int mantissaBits)
+        {
+            int exponentBias = (1 << (exponentBits - 1)) - 1;
+
+            long s = hasSign ? -(f >> (exponentBits + mantissaBits)) : 0;
+            long e = ((f >> mantissaBits) & ((1 << exponentBits) - 1)) - exponentBias;
+            long m = f & ((1 << mantissaBits) - 1);
+
+            long sign     = s;
+            long exponent = 0;
+            long mantissa = 0;
+
+            if (e <= -exponentBias)
+            {
+                //We have a float denormal value. Cheat a bit with the calculation...
+
+                int    denormalExponent = exponentBias + mantissaBits - 1;
+                long   val              = (DOUBLE_EXPONENT_BIAS - denormalExponent) << 52;
+                double multiplier       = *(reinterpret_cast<double*>(&val));
+
+                return (1 - (sign << 1)) * (m * multiplier);
+            }
+            else if (e <= exponentBias)
+            {
+                //We have a normal value that can be directly converted by just changing the exponent
+                //bias and shifting the mantissa.
+
+                exponent  = e + DOUBLE_EXPONENT_BIAS;
+                int shift = 52 - mantissaBits;
+                mantissa  = m << shift;
+            }
+            else
+            {
+                //We either have infinity or NaN, depending on if the mantissa is zero or non-zero.
+                exponent = 2047;
+                if (m == 0)
+                {
+                    mantissa = 0;  //infinity
+                }
+                else
+                {
+                    mantissa = 1;  //NaN
+                }
+            }
+
+            long val = ((sign << 63) | (exponent << 52) | mantissa);
+            return *(reinterpret_cast<double*>(&val));
+        }
+
+        //Half floats
+
+        static short floatToHalf(float f)
+        {
+            return (short)doubleToSmallFloat(f, true, 5, 10);
+        }
+
+        static float halfToFloat(short h)
+        {
+            return (float)smallFloatToDouble(h, true, 5, 10);
+        }
+
+        static short doubleToHalf(double d)
+        {
+            return (short)doubleToSmallFloat(d, true, 5, 10);
+        }
+
+        static double halfToDouble(short h)
+        {
+            return smallFloatToDouble(h, true, 5, 10);
+        }
+
+        //OpenGL 11-bit floats
+
+        static short floatToF11(float f)
+        {
+            return (short)doubleToSmallFloat(f, false, 5, 6);
+        }
+
+        static float f11ToFloat(short f)
+        {
+            return (float)smallFloatToDouble(f, false, 5, 6);
+        }
+
+        static short doubleToF11(double f)
+        {
+            return (short)doubleToSmallFloat(f, false, 5, 6);
+        }
+
+        static double f11ToDouble(short f)
+        {
+            return smallFloatToDouble(f, false, 5, 6);
+        }
+
+        //OpenGL 10-bit floats.
+
+        static short floatToF10(float f)
+        {
+            return (short)doubleToSmallFloat(f, false, 5, 5);
+        }
+
+        static float f10ToFloat(short f)
+        {
+            return (float)smallFloatToDouble(f, false, 5, 5);
+        }
+
+        static short doubleToF10(double f)
+        {
+            return (short)doubleToSmallFloat(f, false, 5, 5);
+        }
+
+        static double f10ToDouble(short f)
+        {
+            return smallFloatToDouble(f, false, 5, 5);
+        }
+    };
+
     uint32_t encode_f11(uint8_t value)
     {
         float val = value / 255.0f;
-        uint32_t numBits;
-        std::memcpy(&numBits, &val, sizeof(val));
-
-        int32_t  exponent = ((numBits >> 23) & 0xFF) - 127;  // Extract exponent and adjust bias
-        uint32_t mantissa = (numBits & 0x7FFFFF);            // Extract mantissa
-        exponent          = exponent + (15 - (-127 + 127));
-
-        int maxExponent = (1 << 5) - 1;  // Maximum value with 5 bits
-        if (exponent > maxExponent)
-        {
-            exponent = maxExponent;
-        }
-        else if (exponent < 0)
-        {
-            exponent = 0;
-        }
-
-         // Extract and round the 6 most significant bits of the mantissa
-        uint32_t newMantissa = (mantissa >> 17);        // Shift to get the most significant 6 bits
-        bool     roundBit    = (mantissa >> 16) & 0x1;  // Check the next bit for possible rounding
-        if (roundBit)
-        {
-            newMantissa += 1;  // Simple rounding; could overflow into exponent, not handled here
-        }
-
-        // Limit mantissa to 6 bits in case of rounding overflow
-        newMantissa &= 0x3F;
-
-        uint32_t result = (exponent << 6) | newMantissa;
-        return result;
+        
+        return uint32_t(FloatConversion::floatToF11(val));
     }
 
     uint32_t encode_f10(uint8_t value)
     {
         float    val = value / 255.0f;
-        uint32_t numBits;
-        std::memcpy(&numBits, &val, sizeof(val));
-
-        int32_t  exponent = ((numBits >> 23) & 0xFF) - 127;  // Extract exponent and adjust bias
-        uint32_t mantissa = (numBits & 0x7FFFFF);            // Extract mantissa
-        exponent          = exponent + (15 - (-127 + 127));
-
-        int maxExponent = (1 << 5) - 1;  // Maximum value with 5 bits
-        if (exponent > maxExponent)
-        {
-            exponent = maxExponent;
-        }
-        else if (exponent < 0)
-        {
-            exponent = 0;
-        }
-
-        // Extract and round the 6 most significant bits of the mantissa
-        uint32_t newMantissa = (mantissa >> 18);        // Shift to get the most significant 6 bits
-        bool     roundBit    = (mantissa >> 17) & 0x1;  // Check the next bit for possible rounding
-        if (roundBit)
-        {
-            newMantissa += 1;  // Simple rounding; could overflow into exponent, not handled here
-        }
-
-        // Limit mantissa to 4 bits in case of rounding overflow
-        newMantissa &= 0xF;
-
-        uint32_t result = (exponent << 5) | newMantissa;
-        return result;
+        return uint32_t(FloatConversion::floatToF10(val));
     }
 
     uint32_t packR11G11B10(uint8_t R_norm, uint8_t G_norm, uint8_t B_norm)
@@ -414,7 +570,7 @@ namespace cauldron
         uint32_t B10 = encode_f10(B_norm);
 
         // Pack them into a single 32-bit value
-        uint32_t packed_value = (R11 << 21) | (G11 << 10) | B10;
+        uint32_t packed_value = (G11 << 21) | (R11 << 10) | B10;
         return packed_value;
     }
 
@@ -423,36 +579,33 @@ namespace cauldron
         std::string fileName = textureFile.u8string();
 
         int32_t channels;
-        m_pData = reinterpret_cast<char*>(
-            stbi_load(fileName.c_str(), reinterpret_cast<int32_t*>(&texDesc.Width), reinterpret_cast<int32_t*>(&texDesc.Height), &channels, STBI_rgb_alpha));
-
-        if (!m_pData)
+        char* tempData = reinterpret_cast<char*>(
+            stbi_load(fileName.c_str(), reinterpret_cast<int32_t*>(&texDesc.Width), reinterpret_cast<int32_t*>(&texDesc.Height), &channels, STBI_rgb));
+        if (!tempData)
             return false;
 
+        m_pData = reinterpret_cast<char*>(new int32_t[texDesc.Width * texDesc.Height]);
+        
         // Some RGB channel rearrangement boogaloo idk
         for (uint32_t h = 0; h < texDesc.Height; ++h)
         {
             for (uint32_t w = 0; w < texDesc.Width; ++w)
             {
-                char*    pPixel = reinterpret_cast<char*>(m_pData + (h * texDesc.Width + w) * 4);
+                char*    pPixel = reinterpret_cast<char*>(tempData + (h * texDesc.Width + w) * 3);
                 char     ch0    = pPixel[0] >= 0 ? pPixel[0] : 0;
                 char     ch1    = pPixel[1] >= 0 ? pPixel[1] : 0;
                 char     ch2    = pPixel[2] >= 0 ? pPixel[2] : 0;
+                char     ch3    = 255;
 
-                //uint32_t  packed32Bits = packR11G11B10(ch0, ch1, ch2);
-                //uint32_t packed32Bits = (ch2 << 16) | (ch1 << 8) | ch0;
-                //uint32_t* pPixel32 = reinterpret_cast<uint32_t*>(m_pData + (h * texDesc.Width + w) * 4);
-                //*pPixel32 = packed32Bits;
-                pPixel[0] = ch0;
-                pPixel[1] = ch1;
-                pPixel[2] = ch2;
-                pPixel[3] = 255;
+                uint32_t packed32Bits = packR11G11B10(ch0, ch1, ch2);
+                uint32_t* pPixel32 = reinterpret_cast<uint32_t*>(m_pData + (h * texDesc.Width + w) * 4);
+                *pPixel32 = packed32Bits;
             }
         }
 
         // Fill in remaining texture information
         texDesc.DepthOrArraySize = 1;
-        texDesc.Format           = ResourceFormat::RGBA8_UNORM;
+        texDesc.Format           = ResourceFormat::RG11B10_FLOAT;
         texDesc.Dimension        = TextureDimension::Texture2D;
         texDesc.MipLevels        = 1;
 

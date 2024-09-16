@@ -171,9 +171,9 @@ private:
     bool m_AllowAsyncCompute                        = true;
     bool m_PendingEnableAsyncCompute                = true;
     bool m_UseCallback                              = false;
-    bool m_DrawFrameGenerationDebugTearLines        = true;
-    bool m_DrawFrameGenerationDebugResetIndicators  = true;
-    bool m_DrawFrameGenerationDebugView             = true;
+    bool m_DrawFrameGenerationDebugTearLines        = false;
+    bool m_DrawFrameGenerationDebugResetIndicators  = false;
+    bool m_DrawFrameGenerationDebugView             = false;
     bool m_DrawUpscalerDebugView                    = false;
     bool m_PresentInterpolatedOnly                  = true;
     bool m_SimulatePresentSkip                      = false;
