@@ -608,16 +608,16 @@ namespace cauldron
         {
             for (uint32_t w = 0; w < texDesc.Width; ++w)
             {
-                char* pPixel        = (tempData + (h * texDesc.Width + w) * 4);
-                float valG          = pPixel[1] / 255.0f;
-                float valB          = pPixel[2] / 255.0f;
-                float valX          = (valG - 0.5f) * 2.0f;
-                float valY          = (0.5f - valB) * 2.0f;
+                char*     pPixel    = (tempData + (h * texDesc.Width + w) * 4);
+                float     valG      = pPixel[1] / 255.0f;
+                float     valB      = pPixel[2] / 255.0f;
+                float     valX      = (valG - 0.5f) * 2.0f;
+                float     valY      = (0.5f - valB) * 2.0f;
                 uint16_t  valX16Bit = float32ToHalf(valX);
                 uint16_t  valY16Bit = float32ToHalf(valY);
                 uint32_t  val       = (valX16Bit << 16) | valY16Bit;
                 uint32_t* pPixel32  = reinterpret_cast<uint32_t*>(m_pData + (h * texDesc.Width + w) * 4);
-                pPixel32[0]         = 0.0f;
+                pPixel32[0]         = 0;
             }
         }
 

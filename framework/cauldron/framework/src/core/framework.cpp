@@ -1845,11 +1845,10 @@ namespace cauldron
 
         // Closes all command lists
         m_pDevice->EndFrame();
-
+        
         // Present
         m_pSwapChain->Present();
-        // m_pSwapChain->DumpSwapChainToFile(L"../media/Color01.png");
-
+        
         // If we are doing GPU Validation, flush every frame
         if (m_Config.GPUValidationEnabled)
             m_pDevice->FlushAllCommandQueues();

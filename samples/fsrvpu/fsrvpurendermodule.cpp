@@ -125,7 +125,7 @@ Texture* LoadTextureFromFile(const std::wstring& path, const std::wstring& name,
     return nullptr;
 }
 
-void SaveTextureToFile(const std::wstring& path, GPUResource* pTextureResource)
+void SaveTextureToFile(const std::wstring& path, const GPUResource* pTextureResource)
 {
     const Texture*      pTexture = pTextureResource->GetTextureResource();
     D3D12_RESOURCE_DESC fromDesc            = pTextureResource->GetImpl()->DX12Desc();
@@ -139,7 +139,8 @@ void SaveTextureToFile(const std::wstring& path, GPUResource* pTextureResource)
     bufferDesc.Flags               = D3D12_RESOURCE_FLAG_NONE;
     bufferDesc.Format              = DXGI_FORMAT_UNKNOWN;
     bufferDesc.Height              = 1;
-    bufferDesc.Width               = fromDesc.Width * fromDesc.Height * GetResourceFormatStride(pTexture->GetFormat());
+    bufferDesc.Width               = fromDesc.Width * fromDesc.Height * 8;
+    //GetResourceFormatStride(fromDesc.Format);
     bufferDesc.Layout              = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
     bufferDesc.MipLevels           = 1;
     bufferDesc.SampleDesc.Count    = 1;
@@ -150,7 +151,7 @@ void SaveTextureToFile(const std::wstring& path, GPUResource* pTextureResource)
         &readBackHeapProperties, D3D12_HEAP_FLAG_NONE, &bufferDesc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&pResourceReadBack));
 
     CommandList* pCmdList = GetDevice()->CreateCommandList(L"SwapchainToFileCL", CommandQueue::Graphics);
-    Barrier      barrier  = Barrier::Transition(pTextureResource, ResourceState::Present, ResourceState::CopySource);
+    Barrier      barrier  = Barrier::Transition(pTextureResource, pTextureResource->GetCurrentResourceState(), ResourceState::CopySource);
     ResourceBarrier(pCmdList, 1, &barrier);
 
     D3D12_PLACED_SUBRESOURCE_FOOTPRINT layout[1]             = {0};
@@ -160,7 +161,7 @@ void SaveTextureToFile(const std::wstring& path, GPUResource* pTextureResource)
     GetDevice()->GetImpl()->DX12Device()->GetCopyableFootprints(&fromDesc, 0, 1, 0, layout, num_rows, row_sizes_in_bytes, &uploadHeapSize);
 
     CD3DX12_TEXTURE_COPY_LOCATION copyDest(pResourceReadBack, layout[0]);
-    CD3DX12_TEXTURE_COPY_LOCATION copySrc(pTextureResource->GetImpl()->DX12Resource(), 0);
+    CD3DX12_TEXTURE_COPY_LOCATION copySrc((const_cast<GPUResource*>(pTextureResource))->GetImpl()->DX12Resource(), 0);
     pCmdList->GetImpl()->DX12CmdList()->CopyTextureRegion(&copyDest, 0, 0, 0, &copySrc, nullptr);
 
     ID3D12Fence* pFence;
@@ -186,7 +187,7 @@ void SaveTextureToFile(const std::wstring& path, GPUResource* pTextureResource)
     stbi_write_jpg(WStringToString(path.c_str()).c_str(), (int)fromDesc.Width, (int)fromDesc.Height, 4, pTimingsBuffer, 100);
     pResourceReadBack->Unmap(0, NULL);
 
-    GetDevice()->FlushAllCommandQueues();
+    //GetDevice()->FlushQueue(CommandQueue::Graphics);
 
     // Release
     pResourceReadBack->Release();
@@ -779,7 +780,7 @@ ffxReturnCode_t FSRVPUModule::UiCompositionCallback(ffxCallbackDescFrameGenerati
 
     GPUResource* pRTResource = GPUResource::GetWrappedResourceFromSDK(L"UI_RenderTarget", params->outputSwapChainBuffer.resource, &rtDesc, rtResourceState);
     GPUResource* pBBResource = GPUResource::GetWrappedResourceFromSDK(L"BackBuffer", params->currentBackBuffer.resource, &bbDesc, bbResourceState);
-    
+
     std::vector<Barrier> barriers;
     barriers = {Barrier::Transition(pRTResource, rtResourceState, ResourceState::CopyDest),
                 Barrier::Transition(pBBResource, bbResourceState, ResourceState::CopySource)};
@@ -787,7 +788,7 @@ ffxReturnCode_t FSRVPUModule::UiCompositionCallback(ffxCallbackDescFrameGenerati
         
     TextureCopyDesc copyDesc(pBBResource, pRTResource);
     CopyTextureRegion(pCmdList, &copyDesc);
-    
+
     barriers[0].SourceState = barriers[0].DestState;
     barriers[0].DestState   = ResourceState::RenderTargetResource;
     swap(barriers[1].SourceState, barriers[1].DestState);
@@ -1291,43 +1292,8 @@ void FSRVPUModule::Execute(double deltaTime, CommandList* pCmdList)
 
         retCode = ffx::Dispatch(m_FrameGenContext, dispatchFg);
         CauldronAssert(ASSERT_CRITICAL, !!retCode, L"Dispatching Frame Generation failed: %d", (uint32_t)retCode);
-
-        if (m_FrameID == 1)
-        {
-            /*
-            auto headed = ffx::LinkHeaders(dispatchFg.header);
-
-            FfxApiResource FSRVPUOutput        = ffx::DynamicCast<ffxDispatchDescFrameGeneration>(headed)->outputs[0];
-            ResourceState FSRVPUResourceState = SDKWrapper::GetFrameworkState((FfxResourceStates)FSRVPUOutput.state);
-            TextureDesc    FSRVPUDesc          = SDKWrapper::GetFrameworkTextureDescription(FSRVPUOutput.description);
-            GPUResource*   FSRVPUOutputTexture = GPUResource::GetWrappedResourceFromSDK(L"FSRVPUOutput", &FSRVPUOutput, &FSRVPUDesc, FSRVPUResourceState);
-
-            std::vector<Barrier> barriers;
-            barriers = {Barrier::Transition(FSRVPUOutputTexture, FSRVPUResourceState, ResourceState::CopyDest)};
-            ResourceBarrier(pCmdList, (uint32_t)barriers.size(), barriers.data());
-            
-            SaveTextureToFile(L"../media/Out.jpg", m_pColorTarget->GetResource());
-            cauldron::GetSwapChain()->DumpSwapChainToFile(L"../media/Out.jpg");
-            */
-        }
     }
 
-    /*
-    ResourceState bbResourceState = SDKWrapper::GetFrameworkState((FfxResourceStates)backbuffer.state);
-    TextureDesc bbDesc = SDKWrapper::GetFrameworkTextureDescription(backbuffer.description);
-
-    GPUResource* pBBResource = GPUResource::GetWrappedResourceFromSDK(L"BackBuffer", backbuffer.resource, &bbDesc, bbResourceState);
-
-    TextureCopyDesc copyColor = TextureCopyDesc(pColorFSRVPUInput->GetResource(), pBBResource);
-    CopyTextureRegion(pCmdList, &copyColor);
-
-    std::vector<Barrier> barriers;
-    barriers.clear();
-    barriers.push_back(Barrier::Transition(pColorFSRVPUInput->GetResource(), ResourceState::CopySource, ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource));
-    barriers.push_back(Barrier::Transition(pBBResource, ResourceState::CopyDest, ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource));
-    ResourceBarrier(pCmdList, static_cast<uint32_t>(barriers.size()), barriers.data());
-    */
-    
     m_FrameID += uint64_t(1 + m_SimulatePresentSkip);
 
     m_SimulatePresentSkip = false;
@@ -1337,7 +1303,7 @@ void FSRVPUModule::Execute(double deltaTime, CommandList* pCmdList)
 
     // FidelityFX contexts modify the set resource view heaps, so set the cauldron one back
     SetAllResourceViewHeaps(pCmdList);
-    
+
     // We are now done with upscaling
     GetFramework()->SetUpscalingState(UpscalerState::PostUpscale);
 }
