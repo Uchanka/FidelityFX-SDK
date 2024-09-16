@@ -1295,6 +1295,7 @@ void FSRVPUModule::Execute(double deltaTime, CommandList* pCmdList)
 
     if (m_FrameID == 7)
     {
+        //FfxApiResource pOutputFg       = SDKWrapper::ffxGetResourceApi(m_pMotionVectors->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
         FfxApiResource pOutputFg       = dispatchFg.outputs[0];
         ResourceState  rtResourceState = SDKWrapper::GetFrameworkState((FfxResourceStates)pOutputFg.state);
         TextureDesc    rtDesc          = SDKWrapper::GetFrameworkTextureDescription(pOutputFg.description);
