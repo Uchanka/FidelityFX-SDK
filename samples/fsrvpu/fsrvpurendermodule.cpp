@@ -1294,15 +1294,31 @@ void FSRVPUModule::Execute(double deltaTime, CommandList* pCmdList)
         CauldronAssert(ASSERT_CRITICAL, !!retCode, L"Dispatching Frame Generation failed: %d", (uint32_t)retCode);
     }
 
-    if (m_FrameID == 7)
+    if (m_FrameID == 8)
+    {
+        FfxApiResource pOutputFg       = dispatchFg.presentColor;
+        ResourceState  rtResourceState = SDKWrapper::GetFrameworkState((FfxResourceStates)pOutputFg.state);
+        TextureDesc    rtDesc          = SDKWrapper::GetFrameworkTextureDescription(pOutputFg.description);
+        GPUResource*   pOutput     = GPUResource::GetWrappedResourceFromSDK(L"FI_CurrentInterpolationSouce", pOutputFg.resource, &rtDesc, rtResourceState);
+        
+        SaveTextureToFile(L"../media/Analyze/Color0.jpg", pOutput);
+    }
+    if (m_FrameID == 9)
     {
         //FfxApiResource pOutputFg       = SDKWrapper::ffxGetResourceApi(m_pMotionVectors->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
         FfxApiResource pOutputFg       = dispatchFg.outputs[0];
         ResourceState  rtResourceState = SDKWrapper::GetFrameworkState((FfxResourceStates)pOutputFg.state);
         TextureDesc    rtDesc          = SDKWrapper::GetFrameworkTextureDescription(pOutputFg.description);
-        GPUResource*   pOutput     = GPUResource::GetWrappedResourceFromSDK(L"Whatever", pOutputFg.resource, &rtDesc, rtResourceState);
+        GPUResource*   pOutput     = GPUResource::GetWrappedResourceFromSDK(L"FI_FSRVPUOutput", pOutputFg.resource, &rtDesc, rtResourceState);
         
-        SaveTextureToFile(L"../media/Color01.jpg", pOutput);
+        SaveTextureToFile(L"../media/Analyze/Color01.jpg", pOutput);
+
+        pOutputFg       = dispatchFg.presentColor;
+        rtResourceState = SDKWrapper::GetFrameworkState((FfxResourceStates)pOutputFg.state);
+        rtDesc          = SDKWrapper::GetFrameworkTextureDescription(pOutputFg.description);
+        pOutput         = GPUResource::GetWrappedResourceFromSDK(L"FI_CurrentInterpolationSouce", pOutputFg.resource, &rtDesc, rtResourceState);
+
+        SaveTextureToFile(L"../media/Analyze/Color1.jpg", pOutput);
     }
 
     m_FrameID += uint64_t(1 + m_SimulatePresentSkip);
