@@ -823,6 +823,7 @@ void FSRVPUModule::UpdateFSRContext(bool enabled)
     {
         const ResolutionInfo& resInfo = GetFramework()->GetResolutionInfo();
         static bool s_InvertedDepth = GetConfig()->InvertedDepth;
+        //static bool s_InvertedDepth = false;
         // Backend creation (for both FFXAPI contexts, FG and Upscale)
 #if defined(FFX_API_DX12)
         ffx::CreateBackendDX12Desc backendDesc{};

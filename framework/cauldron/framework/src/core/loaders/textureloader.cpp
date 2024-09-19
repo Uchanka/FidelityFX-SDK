@@ -405,7 +405,7 @@ namespace cauldron
         {
             for (uint32_t w = 0; w < texDesc.Width; ++w)
             {
-                char* pPixel = (tempData + (h * texDesc.Width + w));
+                uint8_t* pPixel = reinterpret_cast<uint8_t*>(tempData + (h * texDesc.Width + w));
                 float val = pPixel[0] / 255.0f;
                 val = 1.0f - val;
                 float* pPixel32 = reinterpret_cast<float*>(m_pData + (h * texDesc.Width + w) * 4);
