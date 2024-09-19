@@ -485,17 +485,17 @@ namespace cauldron
                 uint8_t*  pPixel    = reinterpret_cast<uint8_t*>(tempData + (h * texDesc.Width + w) * 4);
                 float     valG      = pPixel[1] / 255.0f;
                 float     valB      = pPixel[2] / 255.0f;
-                float     valX      = 2.0f * valG - 1.0f;
-                float     valY      = 1.0f - 2.0f * valB;
+                float     valX      = 2.0f * valB - 1.0f;
+                float     valY      = 1.0f - 2.0f * valG;
 
-                valX = valX;
-                valY = valY;
-                valX = valX / 2.0f;
-                valY = valY / 2.0f;
+                valX = -valX;
+                valY = -valY;
+                //valX = valX / 2.0f;
+                //valY = valY / 2.0f;
 
                 uint32_t  valX16Bit = float_to_half(valX);
                 uint32_t  valY16Bit = float_to_half(valY);
-                uint32_t  val       = (valX16Bit << 16) | valY16Bit;
+                uint32_t  val       = (valY16Bit << 16) | valX16Bit;
                 uint32_t* pPixel32  = reinterpret_cast<uint32_t*>(m_pData + (h * texDesc.Width + w) * 4);
                 pPixel32[0]         = val;
             }
