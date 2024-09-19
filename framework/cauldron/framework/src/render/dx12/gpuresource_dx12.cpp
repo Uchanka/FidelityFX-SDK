@@ -528,6 +528,8 @@ namespace cauldron
         case ResourceFormat::RGB10A2_UNORM:
         case ResourceFormat::RG11B10_FLOAT:
         case ResourceFormat::RG16_FLOAT:
+            // This line below was added by it's a me, Boris
+        case ResourceFormat::RG16_SINT:
         case ResourceFormat::R32_UINT:
         case ResourceFormat::R32_FLOAT:
         case ResourceFormat::D32_FLOAT:

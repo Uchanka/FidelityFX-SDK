@@ -187,14 +187,37 @@ namespace cauldron
         float m_AlphaThreshold    = 1.f;
     };
 
-    class MVTextureDataBlock : public TextureDataBlock
+    class MvTextureDataBlock : public TextureDataBlock
     {
     public:
-        MVTextureDataBlock()
+        MvTextureDataBlock()
             : TextureDataBlock()
         {
         }
-        virtual ~MVTextureDataBlock();
+        virtual ~MvTextureDataBlock();
+
+        /**
+         * @brief   Loads the texture data to memory according to the DataBlock type.
+         */
+        virtual bool LoadTextureData(std::experimental::filesystem::path& textureFile, float alphaThreshold, TextureDesc& texDesc) override;
+
+        /**
+         * @brief   Copies the texture data to the resource's backing memory. Will also generate mip-chain.
+         */
+        virtual void CopyTextureData(void* pDest, uint32_t stride, uint32_t widthStride, uint32_t height, uint32_t sliceOffset) override;
+
+    private:
+        char* m_pData = nullptr;
+    };
+
+    class OfTextureDataBlock : public TextureDataBlock
+    {
+    public:
+        OfTextureDataBlock()
+            : TextureDataBlock()
+        {
+        }
+        virtual ~OfTextureDataBlock();
 
         /**
          * @brief   Loads the texture data to memory according to the DataBlock type.

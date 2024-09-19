@@ -44,13 +44,16 @@ Texture* LoadTextureFromFile(const std::wstring& path, const std::wstring& name,
     {
         Color,
         Depth,
-        Motion
+        Motion,
+        Optic
     };
     TypeOfFile typeOfFile = Color;
     if (format == ResourceFormat::R32_FLOAT)
         typeOfFile = Depth;
     else if (format == ResourceFormat::RG16_FLOAT)
         typeOfFile = Motion;
+    else if (format == ResourceFormat::RG16_SINT)
+        typeOfFile = Optic;
     
     TextureLoadInfo loadInfo = TextureLoadInfo(path, false, 1.0f, flags);
 
@@ -83,8 +86,10 @@ Texture* LoadTextureFromFile(const std::wstring& path, const std::wstring& name,
                 pTextureData = new DepthTextureDataBlock();
                 break;
             case Motion:
-                pTextureData = new MVTextureDataBlock();
+                pTextureData = new MvTextureDataBlock();
                 break;
+            case Optic:
+                pTextureData = new OfTextureDataBlock();
             default:
                 break;
             };
@@ -223,7 +228,7 @@ void FSRVPUModule::Init(const json& initData)
     m_pGeoMvFromFile = LoadTextureFromFile(
         L"..\\media\\GeoMv.png", L"FSRVPUFrame1GeoMv", ResourceFormat::RG16_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
     m_pOptMvFromFile = LoadTextureFromFile(
-        L"..\\media\\OptMf.png", L"FSRVPUFrame1OptMv", ResourceFormat::RG16_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
+        L"..\\media\\OptMf.png", L"FSRVPUFrame1OptMv", ResourceFormat::RG16_SINT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
 
     // Get a CPU resource view that we'll use to map the render target to
     GetResourceViewAllocator()->AllocateCPURenderViews(&m_pRTResourceView);
