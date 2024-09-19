@@ -448,7 +448,7 @@ namespace cauldron
         return *(float*)&x;
     }
 
-    float half_to_float(const ushort x)
+    float half_to_float(const uint32_t x)
     {  // IEEE-754 16-bit floating-point format (without infinity): 1-5-10, exp-15, +-131008.0, +-6.1035156E-5, +-5.9604645E-8, 3.311 digits
         const uint e = (x & 0x7C00) >> 10;       // exponent
         const uint m = (x & 0x03FF) << 13;       // mantissa
@@ -456,7 +456,7 @@ namespace cauldron
         return as_float((x & 0x8000) << 16 | (e != 0) * ((e + 112) << 23 | m) |
                         ((e == 0) & (m != 0)) * ((v - 37) << 23 | ((m << (150 - v)) & 0x007FE000)));  // sign : normalized : denormalized
     }
-    ushort float_to_half(const float x)
+    uint32_t float_to_half(const float x)
     {  // IEEE-754 16-bit floating-point format (without infinity): 1-5-10, exp-15, +-131008.0, +-6.1035156E-5, +-5.9604645E-8, 3.311 digits
         const uint b = as_uint(x) + 0x00001000;  // round-to-nearest-even: add last bit after truncated mantissa
         const uint e = (b & 0x7F800000) >> 23;   // exponent
@@ -482,18 +482,20 @@ namespace cauldron
         {
             for (uint32_t w = 0; w < texDesc.Width; ++w)
             {
-                char*     pPixel    = (tempData + (h * texDesc.Width + w) * 4);
+                uint8_t*  pPixel    = reinterpret_cast<uint8_t*>(tempData + (h * texDesc.Width + w) * 4);
                 float     valG      = pPixel[1] / 255.0f;
                 float     valB      = pPixel[2] / 255.0f;
                 float     valX      = 2.0f * valG - 1.0f;
                 float     valY      = 1.0f - 2.0f * valB;
 
-                valX = valX / 2560.0f;
-                valY = valY / 2560.0f;
+                valX = valX;
+                valY = valY;
+                valX = valX / 2.0f;
+                valY = valY / 2.0f;
 
                 uint32_t  valX16Bit = float_to_half(valX);
                 uint32_t  valY16Bit = float_to_half(valY);
-                uint32_t  val       = (valY16Bit << 16) | valX16Bit;
+                uint32_t  val       = (valX16Bit << 16) | valY16Bit;
                 uint32_t* pPixel32  = reinterpret_cast<uint32_t*>(m_pData + (h * texDesc.Width + w) * 4);
                 pPixel32[0]         = val;
             }
