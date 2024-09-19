@@ -1290,6 +1290,18 @@ void FSRVPUModule::Execute(double deltaTime, CommandList* pCmdList)
         dispatchFg.frameID = m_FrameID;
         dispatchFg.reset   = m_ResetFrameInterpolation;
 
+        bool VPUMode = true;
+        if (VPUMode)
+        {
+            const Texture* pOptMfVPUInput = m_pOptMvFromFile;
+            //FIXME: FFX_API_RESOURCE_STATE_UNORDERED_ACCESS or FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ?
+            dispatchFg.hijackerOptiflow   = SDKWrapper::ffxGetResourceApi(pOptMfVPUInput->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
+        }
+        else
+        {
+            dispatchFg.hijackerOptiflow = FfxApiResource({});
+        }
+
         retCode = ffx::Dispatch(m_FrameGenContext, dispatchFg);
         CauldronAssert(ASSERT_CRITICAL, !!retCode, L"Dispatching Frame Generation failed: %d", (uint32_t)retCode);
     }

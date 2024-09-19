@@ -353,7 +353,15 @@ ffxReturnCode_t ffxProvider_FrameGeneration::Dispatch(ffxContext* context, const
             fiDispatchDesc.renderSize.width  = prepDesc->renderSize.width;
             fiDispatchDesc.renderSize.height = prepDesc->renderSize.height;
             fiDispatchDesc.output = Convert(desc->outputs[0]);
-            fiDispatchDesc.opticalFlowVector = internal_context->backendInterfaceShared.fpGetResource(&internal_context->backendInterfaceShared, internal_context->sharedResources[FFX_FSR3_RESOURCE_IDENTIFIER_OPTICAL_FLOW_VECTOR]);
+            if (desc->hijackerOptiflow.resource)
+            {
+                fiDispatchDesc.opticalFlowVector = Convert(desc->hijackerOptiflow);
+            }
+            else
+            {
+                fiDispatchDesc.opticalFlowVector = internal_context->backendInterfaceShared.fpGetResource(
+                    &internal_context->backendInterfaceShared, internal_context->sharedResources[FFX_FSR3_RESOURCE_IDENTIFIER_OPTICAL_FLOW_VECTOR]);
+            }
             fiDispatchDesc.opticalFlowSceneChangeDetection = internal_context->backendInterfaceShared.fpGetResource(&internal_context->backendInterfaceShared, internal_context->sharedResources[FFX_FSR3_RESOURCE_IDENTIFIER_OPTICAL_FLOW_SCD_OUTPUT]);
             fiDispatchDesc.opticalFlowBlockSize = 8;
             fiDispatchDesc.opticalFlowScale = { 1.f / fiDispatchDesc.displaySize.width, 1.f / fiDispatchDesc.displaySize.height };
