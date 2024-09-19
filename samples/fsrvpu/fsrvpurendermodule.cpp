@@ -1299,9 +1299,10 @@ void FSRVPUModule::Execute(double deltaTime, CommandList* pCmdList)
         FfxApiResource pOutputFg       = dispatchFg.presentColor;
         ResourceState  rtResourceState = SDKWrapper::GetFrameworkState((FfxResourceStates)pOutputFg.state);
         TextureDesc    rtDesc          = SDKWrapper::GetFrameworkTextureDescription(pOutputFg.description);
+        //Note that it's called current but it's already been covered by previous at this point therefore it's 1
         GPUResource*   pOutput     = GPUResource::GetWrappedResourceFromSDK(L"FI_CurrentInterpolationSouce", pOutputFg.resource, &rtDesc, rtResourceState);
         
-        SaveTextureToFile(L"../media/Analyze/Color0.jpg", pOutput);
+        SaveTextureToFile(L"../media/Analyze/Color1.jpg", pOutput);
     }
     if (m_FrameID == 9)
     {
@@ -1316,9 +1317,10 @@ void FSRVPUModule::Execute(double deltaTime, CommandList* pCmdList)
         pOutputFg       = dispatchFg.presentColor;
         rtResourceState = SDKWrapper::GetFrameworkState((FfxResourceStates)pOutputFg.state);
         rtDesc          = SDKWrapper::GetFrameworkTextureDescription(pOutputFg.description);
+        //Note that it's called current but it's already been covered by previous at this point therefore it's 0
         pOutput         = GPUResource::GetWrappedResourceFromSDK(L"FI_CurrentInterpolationSouce", pOutputFg.resource, &rtDesc, rtResourceState);
 
-        SaveTextureToFile(L"../media/Analyze/Color1.jpg", pOutput);
+        SaveTextureToFile(L"../media/Analyze/Color0.jpg", pOutput);
     }
 
     m_FrameID += uint64_t(1 + m_SimulatePresentSkip);
