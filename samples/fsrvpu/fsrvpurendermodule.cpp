@@ -1295,7 +1295,7 @@ void FSRVPUModule::Execute(double deltaTime, CommandList* pCmdList)
         dispatchFg.frameID = m_FrameID;
         dispatchFg.reset   = m_ResetFrameInterpolation;
 
-        bool VPUMode = false;
+        bool VPUMode = true;
         if (VPUMode)
         {
             const Texture* pOptMfVPUInput = m_pOptMvFromFile;

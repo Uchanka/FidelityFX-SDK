@@ -644,9 +644,10 @@ namespace cauldron
                     //float valX = valB;
                     //float valY = valG;
 
-                    int32_t valX16Bit = valX * originalWidth;
-                    int32_t valY16Bit = valY * originalHeight;
-                    int32_t val       = (valY16Bit << 16) | valX16Bit;
+                    int16_t valX16Bit = valX * originalWidth;
+                    int16_t valY16Bit = valY * originalHeight;
+                   
+                    int32_t val       = (((int32_t)(valY16Bit)) << 16) | ((int32_t)(uint16_t)(valX16Bit));
 
                     int32_t* pPixel32 = reinterpret_cast<int32_t*>(m_pData + (h * texDesc.Width + w) * sizeof(int32_t));
                     pPixel32[0]        = val;
