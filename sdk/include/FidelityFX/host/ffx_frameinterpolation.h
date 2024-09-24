@@ -225,7 +225,7 @@ typedef struct FfxFrameInterpolationDispatchDescription {
     FfxResource                         currentBackBuffer_HUDLess;          ///< The current presentation color without HUD content, when use it will be used as interpolation source data.
     FfxResource                         output;                             ///< The output resource where to store the interpolated result.
 
-    FfxResource hijackedCurrentDepth;  ///< Sneeki boogaloo, the current depth buffer data
+    FfxResource hijackedCurrentDepth;   ///< Sneeki boogaloo, the current depth buffer data
     FfxResource hijackedPreviousDepth;  ///< Sneeki boogaloo, the current motion vector data
     FfxResource hijackedCurrentColor;   ///< Sneeki boogaloo, the current color data
     FfxResource hijackedPreviousColor;  ///< Sneeki boogaloo, the previous color data

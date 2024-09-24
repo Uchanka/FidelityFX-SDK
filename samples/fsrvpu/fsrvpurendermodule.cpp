@@ -1307,6 +1307,15 @@ void FSRVPUModule::Execute(double deltaTime, CommandList* pCmdList)
             dispatchFg.hijackerOptiflow = FfxApiResource({});
         }
 
+        //dispatchFg.hijackerCurrentDepth = SDKWrapper::ffxGetResourceApi(m_pDepF2FromFile->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
+        //dispatchFg.hijackerPreviousDepth  = SDKWrapper::ffxGetResourceApi(m_pDepF1FromFile->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
+        //dispatchFg.hijackerCurrentColor = SDKWrapper::ffxGetResourceApi(m_pColF2FromFile->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
+        //dispatchFg.hijackerPreviousColor = SDKWrapper::ffxGetResourceApi(m_pColF1FromFile->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
+        dispatchFg.hijackerCurrentDepth = FfxApiResource({});
+        dispatchFg.hijackerPreviousDepth = FfxApiResource({});
+        dispatchFg.hijackerCurrentColor  = FfxApiResource({});
+        dispatchFg.hijackerPreviousColor = FfxApiResource({});
+
         retCode = ffx::Dispatch(m_FrameGenContext, dispatchFg);
         CauldronAssert(ASSERT_CRITICAL, !!retCode, L"Dispatching Frame Generation failed: %d", (uint32_t)retCode);
     }

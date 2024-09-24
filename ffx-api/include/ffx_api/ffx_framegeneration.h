@@ -85,10 +85,10 @@ struct ffxDispatchDescFrameGeneration
     void*                 commandList;                ///< The command list on which to register render commands.
     struct FfxApiResource presentColor;               ///< The current presentation color, this will be used as source data.
 
-    //struct FfxApiResource hijackercurrentDepth;       ///<<<<< The sekrit hijacked depth stuff )))))
-    //struct FfxApiResource hijackerpreviousDepth;      ///<<<<< The sekrit hijacked geometry motion vectors stuff )))))
-    //struct FfxApiResource hijackercurrentColor;       ///<<<<< The sekrit hijacked depth stuff )))))
-    //struct FfxApiResource hijackerpreviousColor;      ///<<<<< The sekrit hijacked geometry motion vectors stuff )))))
+    struct FfxApiResource hijackerCurrentDepth;       ///<<<<< The sekrit hijacked depth stuff )))))
+    struct FfxApiResource hijackerPreviousDepth;      ///<<<<< The sekrit hijacked geometry motion vectors stuff )))))
+    struct FfxApiResource hijackerCurrentColor;       ///<<<<< The sekrit hijacked depth stuff )))))
+    struct FfxApiResource hijackerPreviousColor;      ///<<<<< The sekrit hijacked geometry motion vectors stuff )))))
 
     struct FfxApiResource hijackerOptiflow;           ///<<<<< The sekrit hijacked optical flow stuff )))))
 
