@@ -562,13 +562,13 @@ namespace cauldron
                     float* pPixel = (tempData + (h * texDesc.Width + w) * 4);
                     float  valG   = pPixel[0];
                     float  valB   = pPixel[1];
-                    //float  valX     = 2.0f * valB - 1.0f;
-                    //float  valY     = 1.0f - 2.0f * valG;
+                    float  valX     = 2.0f * valB - 1.0f;
+                    float  valY     = 1.0f - 2.0f * valG;
 
-                    //valX = -valX;
-                    //valY = -valY;
-                    float valX = valB;
-                    float valY = valG;
+                    valX = -valX;
+                    valY = -valY;
+                    //float valX = valB;
+                    //float valY = valG;
 
                     uint32_t valX16Bit = float_to_half(valX);
                     uint32_t valY16Bit = float_to_half(valY);
@@ -625,8 +625,8 @@ namespace cauldron
             m_pData = reinterpret_cast<char*>(new uint32_t[texDesc.Width * texDesc.Height]);
             //CauldronAssert(ASSERT_ERROR, numChannels == 2, L"OF exr file %ls is expected to have 2 channels.", textureFile.c_str());
 
-            uint32_t originalWidth  = texDesc.Width * 8;
-            uint32_t originalHeight = texDesc.Height * 8;
+            int32_t originalWidth  = texDesc.Width * 8;
+            int32_t originalHeight = texDesc.Height * 8;
 
             // Process the data (e.g., print some of the pixel values)
             for (uint32_t h = 0; h < texDesc.Height; ++h)
@@ -636,13 +636,13 @@ namespace cauldron
                     float* pPixel = (tempData + (h * texDesc.Width + w) * 4);
                     float  valG   = pPixel[0];
                     float  valB   = pPixel[1];
-                    //float  valX   = 2.0f * valB - 1.0f;
-                    //float  valY   = 1.0f - 2.0f * valG;
+                    float  valX   = 2.0f * valB - 1.0f;
+                    float  valY   = 1.0f - 2.0f * valG;
 
-                    //valX = -valX;
-                    //valY = -valY;
-                    float valX = valB;
-                    float valY = valG;
+                    valX = -valX;
+                    valY = -valY;
+                    //float valX = valB;
+                    //float valY = valG;
 
                     int32_t valX16Bit = valX * originalWidth;
                     int32_t valY16Bit = valY * originalHeight;
