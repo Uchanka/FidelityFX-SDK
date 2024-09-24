@@ -56,11 +56,7 @@ void RestoreApplicationSwapChain(bool recreateSwapchain = true);
 
 void FSRRenderModule::Init(const json& initData)
 {
-    m_pTAARenderModule   = static_cast<TAARenderModule*>(GetFramework()->GetRenderModule("TAARenderModule"));
-    m_pTransRenderModule = static_cast<TranslucencyRenderModule*>(GetFramework()->GetRenderModule("TranslucencyRenderModule"));
     m_pToneMappingRenderModule = static_cast<ToneMappingRenderModule*>(GetFramework()->GetRenderModule("ToneMappingRenderModule"));
-    CauldronAssert(ASSERT_CRITICAL, m_pTAARenderModule, L"FidelityFX FSR Sample: Error: Could not find TAA render module.");
-    CauldronAssert(ASSERT_CRITICAL, m_pTransRenderModule, L"FidelityFX FSR Sample: Error: Could not find Translucency render module.");
     CauldronAssert(ASSERT_CRITICAL, m_pToneMappingRenderModule, L"FidelityFX FSR Sample: Error: Could not find Tone Mapping render module.");
 
     // Fetch needed resources
@@ -97,9 +93,6 @@ void FSRRenderModule::Init(const json& initData)
     transOptions.OptionalAdditionalOutputs = L"float ReactiveTarget : SV_TARGET1; float CompositionTarget : SV_TARGET2;";
     transOptions.OptionalAdditionalExports =
         L"float hasAnimatedTexture = 0.f; output.ReactiveTarget = ReactiveMask; output.CompositionTarget = max(Alpha, hasAnimatedTexture);";
-
-    // Add additional exports for FSR to translucency pass
-    m_pTransRenderModule->AddOptionalTransparencyOptions(transOptions);
 
     // Create temporary texture to copy color into before upscale
     {
@@ -506,14 +499,12 @@ void FSRRenderModule::SwitchUpscaler(int32_t newUpscaler)
     switch (newUpscaler)
     {
     case 0:
-        m_pTAARenderModule->EnableModule(false);
         m_pToneMappingRenderModule->EnableModule(true);
         m_EnableMaskOptions = false;
         break;
     case 1:
         ClearReInit();
         // Also disable TAA render module
-        m_pTAARenderModule->EnableModule(false);
         m_pToneMappingRenderModule->EnableModule(true);
         m_EnableMaskOptions = true;
         break;

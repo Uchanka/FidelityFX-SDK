@@ -84,7 +84,14 @@ struct ffxDispatchDescFrameGeneration
     ffxDispatchDescHeader header;
     void*                 commandList;                ///< The command list on which to register render commands.
     struct FfxApiResource presentColor;               ///< The current presentation color, this will be used as source data.
+
+    //struct FfxApiResource hijackercurrentDepth;       ///<<<<< The sekrit hijacked depth stuff )))))
+    //struct FfxApiResource hijackerpreviousDepth;      ///<<<<< The sekrit hijacked geometry motion vectors stuff )))))
+    //struct FfxApiResource hijackercurrentColor;       ///<<<<< The sekrit hijacked depth stuff )))))
+    //struct FfxApiResource hijackerpreviousColor;      ///<<<<< The sekrit hijacked geometry motion vectors stuff )))))
+
     struct FfxApiResource hijackerOptiflow;           ///<<<<< The sekrit hijacked optical flow stuff )))))
+
     struct FfxApiResource outputs[4];                 ///< Destination targets (1 for each frame in numGeneratedFrames).
     uint32_t              numGeneratedFrames;         ///< The number of frames to generate from the passed in color target.
     bool                  reset;                      ///< A boolean value which when set to true, indicates the camera has moved discontinuously.

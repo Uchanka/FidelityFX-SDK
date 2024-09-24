@@ -220,9 +220,7 @@ private:
     const cauldron::Texture* m_pUiTexture[2]      = {};
     const cauldron::Texture* m_pHudLessTexture[2] = {};
 
-    TAARenderModule*          m_pTAARenderModule         = nullptr;
     ToneMappingRenderModule*  m_pToneMappingRenderModule = nullptr;
-    TranslucencyRenderModule* m_pTransRenderModule       = nullptr;
 };
 
 // alias to get sample.cpp to use this class.
