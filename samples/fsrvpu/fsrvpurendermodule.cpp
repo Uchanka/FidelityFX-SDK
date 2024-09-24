@@ -30,8 +30,6 @@
 #include "stb/stb_image.h"
 #include "stb/stb_image_write.h"
 
-#include "tinyexr.h"
-
 #include <functional>
 #include <experimental/filesystem>
 
@@ -42,21 +40,21 @@ void RestoreApplicationSwapChain(bool recreateSwapchain = true);
 
 Texture* LoadTextureFromFile(const std::wstring& path, const std::wstring& name, ResourceFormat format, ResourceFlags flags)
 {
-    enum TypeOfFile
+    enum UsageOfFile
     {
         Color,
         Depth,
         Motion,
         Optic
     };
-    TypeOfFile typeOfFile = Color;
+    UsageOfFile typeOfFile = Color;
     if (format == ResourceFormat::R32_FLOAT)
         typeOfFile = Depth;
     else if (format == ResourceFormat::RG16_FLOAT)
         typeOfFile = Motion;
     else if (format == ResourceFormat::RG16_SINT)
         typeOfFile = Optic;
-    
+
     TextureLoadInfo loadInfo = TextureLoadInfo(path, false, 1.0f, flags);
 
     bool fileExists = experimental::filesystem::exists(loadInfo.TextureFile);
@@ -224,13 +222,13 @@ void FSRVPUModule::Init(const json& initData)
     m_pColF2FromFile = LoadTextureFromFile(
         L"..\\media\\Color1.png", L"FSRVPUFrame2", ResourceFormat::RGBA8_UNORM, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
     m_pDepF1FromFile = LoadTextureFromFile(
-        L"..\\media\\Depth0.png", L"FSRVPUFrame1Depth", ResourceFormat::R32_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
+        L"..\\media\\Depth0.exr", L"FSRVPUFrame1Depth", ResourceFormat::R32_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
     m_pDepF2FromFile = LoadTextureFromFile(
-        L"..\\media\\Depth1.png", L"FSRVPUFrame2Depth", ResourceFormat::R32_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
+        L"..\\media\\Depth1.exr", L"FSRVPUFrame2Depth", ResourceFormat::R32_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
     m_pGeoMvFromFile = LoadTextureFromFile(
-        L"..\\media\\GeoMv.png", L"FSRVPUFrame1GeoMv", ResourceFormat::RG16_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
+        L"..\\media\\GeoMv.exr", L"FSRVPUFrame1GeoMv", ResourceFormat::RG16_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
     m_pOptMvFromFile = LoadTextureFromFile(
-        L"..\\media\\OptMf.png", L"FSRVPUFrame1OptMv", ResourceFormat::RG16_SINT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
+        L"..\\media\\OptMf.exr", L"FSRVPUFrame1OptMv", ResourceFormat::RG16_SINT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
 
     // Get a CPU resource view that we'll use to map the render target to
     GetResourceViewAllocator()->AllocateCPURenderViews(&m_pRTResourceView);

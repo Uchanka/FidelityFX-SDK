@@ -29,6 +29,10 @@
 #include "render/device.h"
 #include "render/gpuresource.h"
 
+#define TINYEXR_IMPLEMENTATION
+
+#include "misc/tinyexr.h"
+
 using namespace std::experimental;
 
 namespace cauldron
@@ -328,7 +332,7 @@ namespace cauldron
         // Generate the next mip in the chain to read
         MipImage(bytesWidth / 4, height);
     }
-
+    
     // Whatever for the Color
     ColorTextureDataBlock::~ColorTextureDataBlock()
     {
@@ -340,39 +344,96 @@ namespace cauldron
     {
         std::string fileName = textureFile.u8string();
 
-        int32_t channels;
-        char* tempData = reinterpret_cast<char*>(
-            stbi_load(fileName.c_str(), reinterpret_cast<int32_t*>(&texDesc.Width), reinterpret_cast<int32_t*>(&texDesc.Height), &channels, STBI_rgb));
-        if (!tempData)
-            return false;
-
-        m_pData = reinterpret_cast<char*>(new uint32_t[texDesc.Width * texDesc.Height]);
-        
-        // Some RGB channel rearrangement boogaloo idk
-        for (uint32_t h = 0; h < texDesc.Height; ++h)
+        if (textureFile.extension() == ".png")
         {
-            for (uint32_t w = 0; w < texDesc.Width; ++w)
+            int32_t channels;
+            char* tempData = reinterpret_cast<char*>(
+                stbi_load(fileName.c_str(), reinterpret_cast<int32_t*>(&texDesc.Width), reinterpret_cast<int32_t*>(&texDesc.Height), &channels, STBI_rgb));
+            if (!tempData)
+                return false;
+
+            m_pData = reinterpret_cast<char*>(new uint32_t[texDesc.Width * texDesc.Height]);
+
+            // Some RGB channel rearrangement boogaloo idk
+            for (uint32_t h = 0; h < texDesc.Height; ++h)
             {
-                uint8_t* pPixel = reinterpret_cast<uint8_t*>(tempData + (h * texDesc.Width + w) * 3);
-                uint8_t  r      = pPixel[0];
-                uint8_t  g      = pPixel[1];
-                uint8_t  b      = pPixel[2];
-                uint8_t  a      = 255;
+                for (uint32_t w = 0; w < texDesc.Width; ++w)
+                {
+                    uint8_t* pPixel = reinterpret_cast<uint8_t*>(tempData + (h * texDesc.Width + w) * 3);
+                    uint8_t  r      = pPixel[0];
+                    uint8_t  g      = pPixel[1];
+                    uint8_t  b      = pPixel[2];
+                    uint8_t  a      = 255;
 
-                //uint32_t packed32Bits = packR11G11B10(ch0, ch1, ch2);
-                uint32_t packed32Bits = a << 24 | b << 16 | g << 8 | r;
-                uint32_t* pPixel32 = reinterpret_cast<uint32_t*>(m_pData + (h * texDesc.Width + w) * 4);
-                *pPixel32 = packed32Bits;
+                    //uint32_t packed32Bits = packR11G11B10(ch0, ch1, ch2);
+                    uint32_t  packed32Bits = a << 24 | b << 16 | g << 8 | r;
+                    uint32_t* pPixel32     = reinterpret_cast<uint32_t*>(m_pData + (h * texDesc.Width + w) * 4);
+                    *pPixel32              = packed32Bits;
+                }
             }
+
+            // Fill in remaining texture information
+            texDesc.DepthOrArraySize = 1;
+            texDesc.Format           = ResourceFormat::RGBA8_UNORM;
+            texDesc.Dimension        = TextureDimension::Texture2D;
+            texDesc.MipLevels        = 1;
+
+            free(tempData);
+
+            return true;
         }
+        else if (textureFile.extension() == ".exr")
+        {
+            float*      tempData = nullptr;
+            const char* err      = nullptr;
+            int         ret = LoadEXR(&tempData, reinterpret_cast<int*>(&texDesc.Width), reinterpret_cast<int*>(&texDesc.Height), fileName.c_str(), nullptr);
 
-        // Fill in remaining texture information
-        texDesc.DepthOrArraySize = 1;
-        texDesc.Format           = ResourceFormat::RGBA8_UNORM;
-        texDesc.Dimension        = TextureDimension::Texture2D;
-        texDesc.MipLevels        = 1;
+            if (ret != TINYEXR_SUCCESS)
+                return false;
 
-        return true;
+            m_pData = reinterpret_cast<char*>(new uint32_t[texDesc.Width * texDesc.Height]);
+            //CauldronAssert(ASSERT_ERROR, numChannels == 3, L"Color exr file %ls is expected to have 3 channels.", textureFile.c_str());
+
+            // Process the data (e.g., print some of the pixel values)
+            for (uint32_t h = 0; h < texDesc.Height; ++h)
+            {
+                for (uint32_t w = 0; w < texDesc.Width; ++w)
+                {
+                    float* pPixel = (tempData + (h * texDesc.Width + w) * 4);
+                    uint32_t  r      = pPixel[0] * 255.0f;
+                    uint32_t  g      = pPixel[1] * 255.0f;
+                    uint32_t  b      = pPixel[2] * 255.0f;
+                    uint32_t  a      = 1.0f * 255.0f;
+                    if (r >= 255)
+                        r = 255;
+                    if (g >= 255)
+                        g = 255;
+                    if (b >= 255)
+                        b = 255;
+
+                    //uint32_t packed32Bits = packR11G11B10(ch0, ch1, ch2);
+                    uint32_t  packed32Bits = a << 24 | b << 16 | g << 8 | r;
+                    uint32_t* pPixel32     = reinterpret_cast<uint32_t*>(m_pData + (h * texDesc.Width + w) * sizeof(uint32_t));
+                    *pPixel32              = packed32Bits;
+                }
+            }
+
+            // Fill in remaining texture information
+            texDesc.DepthOrArraySize = 1;
+            texDesc.Format           = ResourceFormat::RGBA8_UNORM;
+            texDesc.Dimension        = TextureDimension::Texture2D;
+            texDesc.MipLevels        = 1;
+            
+            // Free the memory
+            free(tempData);
+
+            return true;
+        }
+        else
+        {
+            CauldronError(L"Unsupported texture file format %ls", textureFile.c_str());
+            return false;
+        }
     }
 
     void ColorTextureDataBlock::CopyTextureData(void* pDest, uint32_t stride, uint32_t bytesWidth, uint32_t height, uint32_t readOffset)
@@ -392,35 +453,43 @@ namespace cauldron
     {
         std::string fileName = textureFile.u8string();
 
-        int32_t channels;
-        //Maybe go stbi_load_16?
-        char* tempData = reinterpret_cast<char*>(
-            stbi_load(fileName.c_str(), reinterpret_cast<int32_t*>(&texDesc.Width), reinterpret_cast<int32_t*>(&texDesc.Height), &channels, STBI_grey));
-        if (!tempData)
-            return false;
-
-        m_pData = reinterpret_cast<char*>(new float[texDesc.Width * texDesc.Height]);
-        
-        for (uint32_t h = 0; h < texDesc.Height; ++h)
+        if (textureFile.extension() != ".exr")
         {
-            for (uint32_t w = 0; w < texDesc.Width; ++w)
-            {
-                uint8_t* pPixel = reinterpret_cast<uint8_t*>(tempData + (h * texDesc.Width + w));
-                float val = pPixel[0] / 255.0f;
-                val = 1.0f - val;
-                float* pPixel32 = reinterpret_cast<float*>(m_pData + (h * texDesc.Width + w) * 4);
-                pPixel32[0] = val;
-            }
+            CauldronError(L"Depth texture file %ls is expected to be an exr file.", textureFile.c_str());
+            return false;
         }
+        else
+        {
+            float*      tempData = nullptr;
+            const char* err      = nullptr;
+            int         ret = LoadEXR(&tempData, reinterpret_cast<int*>(&texDesc.Width), reinterpret_cast<int*>(&texDesc.Height), fileName.c_str(), nullptr);
 
-        // Fill in remaining texture information
-        texDesc.DepthOrArraySize = 1;
-        texDesc.Format           = ResourceFormat::D32_FLOAT;
-        texDesc.Dimension        = TextureDimension::Texture2D;
-        texDesc.MipLevels        = 1;
+            if (ret != TINYEXR_SUCCESS)
+                return false;
 
-        free(tempData);
-        return true;
+            m_pData = reinterpret_cast<char*>(new float[texDesc.Width * texDesc.Height]);
+            //CauldronAssert(ASSERT_ERROR, numChannels == 1, L"Depth exr file %ls is expected to be single channeled.", textureFile.c_str());
+
+            // Process the data (e.g., print some of the pixel values)
+            for (uint32_t h = 0; h < texDesc.Height; ++h)
+            {
+                for (uint32_t w = 0; w < texDesc.Width; ++w)
+                {
+                    float* pPixel   = (tempData + (h * texDesc.Width + w) * 4);
+                    float* pPixel32 = reinterpret_cast<float*>(m_pData + (h * texDesc.Width + w) * sizeof(float));
+                    *pPixel32       = pPixel[0];
+                }
+            }
+
+            texDesc.DepthOrArraySize = 1;
+            texDesc.Format           = ResourceFormat::D32_FLOAT;
+            texDesc.Dimension        = TextureDimension::Texture2D;
+            texDesc.MipLevels        = 1;
+
+            free(tempData);
+
+            return true;
+        }
     }
 
     void DepthTextureDataBlock::CopyTextureData(void* pDest, uint32_t stride, uint32_t bytesWidth, uint32_t height, uint32_t readOffset)
@@ -467,46 +536,58 @@ namespace cauldron
     {
         std::string fileName = textureFile.u8string();
 
-        int32_t channels;
-        char* tempData = reinterpret_cast<char*>(
-            stbi_load(fileName.c_str(), reinterpret_cast<int32_t*>(&texDesc.Width), reinterpret_cast<int32_t*>(&texDesc.Height), &channels, STBI_rgb_alpha));
-        if (!tempData)
-            return false;
-
-        // 16 + 16 = 32
-        m_pData = reinterpret_cast<char*>(new uint32_t[texDesc.Width * texDesc.Height]);
-
-        for (uint32_t h = 0; h < texDesc.Height; ++h)
+        if (textureFile.extension() != ".exr")
         {
-            for (uint32_t w = 0; w < texDesc.Width; ++w)
-            {
-                uint8_t*  pPixel    = reinterpret_cast<uint8_t*>(tempData + (h * texDesc.Width + w) * 4);
-                float     valG      = pPixel[1] / 255.0f;
-                float     valB      = pPixel[2] / 255.0f;
-                float     valX      = 2.0f * valB - 1.0f;
-                float     valY      = 1.0f - 2.0f * valG;
-
-                valX = -valX;
-                valY = -valY;
-                //valX = valX / 2.0f;
-                //valY = valY / 2.0f;
-
-                uint32_t  valX16Bit = float_to_half(valX);
-                uint32_t  valY16Bit = float_to_half(valY);
-                uint32_t  val       = (valY16Bit << 16) | valX16Bit;
-                uint32_t* pPixel32  = reinterpret_cast<uint32_t*>(m_pData + (h * texDesc.Width + w) * 4);
-                pPixel32[0]         = val;
-            }
+            CauldronError(L"Depth texture file %ls is expected to be an exr file.", textureFile.c_str());
+            return false;
         }
+        else
+        {
+            float*      tempData = nullptr;
+            const char* err      = nullptr;
+            int         ret = LoadEXR(&tempData, reinterpret_cast<int*>(&texDesc.Width), reinterpret_cast<int*>(&texDesc.Height), fileName.c_str(), nullptr);
 
-        // Fill in remaining texture information
-        texDesc.DepthOrArraySize = 1;
-        texDesc.Format           = ResourceFormat::RG16_FLOAT;
-        texDesc.Dimension        = TextureDimension::Texture2D;
-        texDesc.MipLevels        = 1;
+            if (ret != TINYEXR_SUCCESS)
+                return false;
 
-        free(tempData);
-        return true;
+            // 16 + 16 = 32
+            m_pData = reinterpret_cast<char*>(new uint32_t[texDesc.Width * texDesc.Height]);
+            //CauldronAssert(ASSERT_ERROR, numChannels == 2, L"MV exr file %ls is expected to have 2 channels.", textureFile.c_str());
+
+            // Process the data (e.g., print some of the pixel values)
+            for (uint32_t h = 0; h < texDesc.Height; ++h)
+            {
+                for (uint32_t w = 0; w < texDesc.Width; ++w)
+                {
+                    float* pPixel = (tempData + (h * texDesc.Width + w) * 4);
+                    float  valG   = pPixel[0];
+                    float  valB   = pPixel[1];
+                    //float  valX     = 2.0f * valB - 1.0f;
+                    //float  valY     = 1.0f - 2.0f * valG;
+
+                    //valX = -valX;
+                    //valY = -valY;
+                    float valX = valB;
+                    float valY = valG;
+
+                    uint32_t valX16Bit = float_to_half(valX);
+                    uint32_t valY16Bit = float_to_half(valY);
+                    uint32_t val       = (valY16Bit << 16) | valX16Bit;
+
+                    uint32_t* pPixel32 = reinterpret_cast<uint32_t*>(m_pData + (h * texDesc.Width + w) * sizeof(uint32_t));
+                    pPixel32[0]        = val;
+                }
+            }
+
+            texDesc.DepthOrArraySize = 1;
+            texDesc.Format           = ResourceFormat::RG16_FLOAT;
+            texDesc.Dimension        = TextureDimension::Texture2D;
+            texDesc.MipLevels        = 1;
+
+            free(tempData);
+
+            return true;
+        }
     }
 
     void MvTextureDataBlock::CopyTextureData(void* pDest, uint32_t stride, uint32_t bytesWidth, uint32_t height, uint32_t readOffset)
@@ -526,47 +607,61 @@ namespace cauldron
     {
         std::string fileName = textureFile.u8string();
 
-        int32_t channels;
-        char*   tempData = reinterpret_cast<char*>(
-            stbi_load(fileName.c_str(), reinterpret_cast<int32_t*>(&texDesc.Width), reinterpret_cast<int32_t*>(&texDesc.Height), &channels, STBI_rgb_alpha));
-        uint32_t originalWidth  = texDesc.Width * 8;
-        uint32_t originalHeight = texDesc.Height * 8;
-        if (!tempData)
-            return false;
-
-        m_pData = reinterpret_cast<char*>(new uint32_t[texDesc.Width * texDesc.Height]);
-
-        // Some RGB channel rearrangement boogaloo idk
-        for (uint32_t h = 0; h < texDesc.Height; ++h)
+        if (textureFile.extension() != ".exr")
         {
-            for (uint32_t w = 0; w < texDesc.Width; ++w)
-            {
-                uint8_t* pPixel = reinterpret_cast<uint8_t*>(tempData + (h * texDesc.Width + w) * 4);
-                float    valG   = pPixel[1] / 255.0f;
-                float    valB   = pPixel[2] / 255.0f;
-                float    valX   = 2.0f * valB - 1.0f;
-                float    valY   = 1.0f - 2.0f * valG;
-
-                valX = -valX;
-                valY = -valY;
-                //valX = valX / 2.0f;
-                //valY = valY / 2.0f;
-
-                int32_t  valX16Bit = valX * originalWidth;
-                int32_t  valY16Bit = valY * originalHeight;
-                int32_t  val       = (valY16Bit << 16) | valX16Bit;
-                int32_t* pPixel32  = reinterpret_cast<int32_t*>(m_pData + (h * texDesc.Width + w) * 4);
-                pPixel32[0]         = val;
-            }
+            CauldronError(L"Depth texture file %ls is expected to be an exr file.", textureFile.c_str());
+            return false;
         }
+        else
+        {
+            float*      tempData = nullptr;
+            const char* err      = nullptr;
+            int         ret = LoadEXR(&tempData, reinterpret_cast<int*>(&texDesc.Width), reinterpret_cast<int*>(&texDesc.Height), fileName.c_str(), nullptr);
 
-        // Fill in remaining texture information
-        texDesc.DepthOrArraySize = 1;
-        texDesc.Format           = ResourceFormat::RG16_SINT;
-        texDesc.Dimension        = TextureDimension::Texture2D;
-        texDesc.MipLevels        = 1;
+            if (ret != TINYEXR_SUCCESS)
+                return false;
 
-        return true;
+            // 16 + 16 = 32
+            m_pData = reinterpret_cast<char*>(new uint32_t[texDesc.Width * texDesc.Height]);
+            //CauldronAssert(ASSERT_ERROR, numChannels == 2, L"OF exr file %ls is expected to have 2 channels.", textureFile.c_str());
+
+            uint32_t originalWidth  = texDesc.Width * 8;
+            uint32_t originalHeight = texDesc.Height * 8;
+
+            // Process the data (e.g., print some of the pixel values)
+            for (uint32_t h = 0; h < texDesc.Height; ++h)
+            {
+                for (uint32_t w = 0; w < texDesc.Width; ++w)
+                {
+                    float* pPixel = (tempData + (h * texDesc.Width + w) * 4);
+                    float  valG   = pPixel[0];
+                    float  valB   = pPixel[1];
+                    //float  valX   = 2.0f * valB - 1.0f;
+                    //float  valY   = 1.0f - 2.0f * valG;
+
+                    //valX = -valX;
+                    //valY = -valY;
+                    float valX = valB;
+                    float valY = valG;
+
+                    int32_t valX16Bit = valX * originalWidth;
+                    int32_t valY16Bit = valY * originalHeight;
+                    int32_t val       = (valY16Bit << 16) | valX16Bit;
+
+                    int32_t* pPixel32 = reinterpret_cast<int32_t*>(m_pData + (h * texDesc.Width + w) * sizeof(int32_t));
+                    pPixel32[0]        = val;
+                }
+            }
+
+            texDesc.DepthOrArraySize = 1;
+            texDesc.Format           = ResourceFormat::RG16_SINT;
+            texDesc.Dimension        = TextureDimension::Texture2D;
+            texDesc.MipLevels        = 1;
+
+            free(tempData);
+
+            return true;
+        }
     }
 
     void OfTextureDataBlock::CopyTextureData(void* pDest, uint32_t stride, uint32_t bytesWidth, uint32_t height, uint32_t readOffset)
