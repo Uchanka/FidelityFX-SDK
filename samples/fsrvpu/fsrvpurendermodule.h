@@ -182,6 +182,8 @@ private:
     bool m_DoublebufferInSwapchain                  = false;
     bool m_OfUiEnabled                              = true;
 
+    bool m_HijackedOpticalFlow = false;
+
     // FFX API Context members
     std::vector<uint64_t> m_FsrVersionIds;
     uint32_t m_FsrVersionIndex = 0;
@@ -208,10 +210,6 @@ private:
     const cauldron::Texture* m_pGeoMvFromFile = nullptr;
     // Hijacking FSR Optical Flow
     const cauldron::Texture* m_pOptMvFromFile = nullptr;
-
-    // Raster views for reactive/composition masks
-    std::vector<const cauldron::RasterView*> m_RasterViews           = {};
-    cauldron::ResourceView*                  m_pUiTargetResourceView = nullptr;
 
     // For resolution updates
     std::function<cauldron::ResolutionInfo(uint32_t, uint32_t)> m_pUpdateFunc = nullptr;

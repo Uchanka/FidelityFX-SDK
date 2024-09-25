@@ -353,7 +353,7 @@ ffxReturnCode_t ffxProvider_FrameGeneration::Dispatch(ffxContext* context, const
             fiDispatchDesc.renderSize.width  = prepDesc->renderSize.width;
             fiDispatchDesc.renderSize.height = prepDesc->renderSize.height;
             fiDispatchDesc.output = Convert(desc->outputs[0]);
-            if (desc->hijackerOptiflow.resource)
+            if (desc->doingHijack)
             {
                 fiDispatchDesc.opticalFlowVector = Convert(desc->hijackerOptiflow);
             }

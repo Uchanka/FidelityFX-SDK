@@ -208,6 +208,78 @@ void FSRVPUModule::Init(const json& initData)
     m_pColorTarget           = GetFramework()->GetColorTargetForCallback(GetName());
     m_pTonemappedColorTarget = GetFramework()->GetRenderTexture(L"SwapChainProxy");
     
+    json FSRVPUConfig = initData;
+    if (FSRVPUConfig.find("CurrentColor") != FSRVPUConfig.end())
+    {
+        std::string path = FSRVPUConfig["CurrentColor"].get<std::string>();
+        std::wstring wpath = std::wstring(path.begin(), path.end());
+        m_pColF2FromFile = LoadTextureFromFile(wpath, L"FSRVPUFrame1", ResourceFormat::RGBA8_UNORM, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
+    }
+    else
+    {
+        CauldronError(L"FSRVPU config json missing: CurrentColor");
+        return;
+    }
+    if (FSRVPUConfig.find("PreviousColor") != FSRVPUConfig.end())
+    {
+        std::string path = FSRVPUConfig["PreviousColor"].get<std::string>();
+        std::wstring wpath = std::wstring(path.begin(), path.end());
+        m_pColF1FromFile = LoadTextureFromFile(wpath, L"FSRVPUFrame2", ResourceFormat::RGBA8_UNORM, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
+    }
+    else
+    {
+        CauldronError(L"FSRVPU config json missing: PreviousColor");
+        return;
+    }
+    if (FSRVPUConfig.find("CurrentDepth") != FSRVPUConfig.end())
+    {
+        std::string path = FSRVPUConfig["CurrentDepth"].get<std::string>();
+        std::wstring wpath = std::wstring(path.begin(), path.end());
+        m_pDepF2FromFile =
+            LoadTextureFromFile(wpath, L"FSRVPUFrame1Depth", ResourceFormat::R32_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
+    }
+    else
+    {
+        CauldronError(L"FSRVPU config json missing: CurrentDepth");
+        return;
+    }
+    if (FSRVPUConfig.find("PreviousDepth") != FSRVPUConfig.end())
+    {
+        std::string path = FSRVPUConfig["PreviousDepth"].get<std::string>();
+        std::wstring wpath = std::wstring(path.begin(), path.end());
+        m_pDepF1FromFile =
+            LoadTextureFromFile(wpath, L"FSRVPUFrame2Depth", ResourceFormat::R32_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
+    }
+    else
+    {
+        CauldronError(L"FSRVPU config json missing: PreviousDepth");
+        return;
+    }
+    if (FSRVPUConfig.find("GeometricMV") != FSRVPUConfig.end())
+    {
+        std::string path = FSRVPUConfig["GeometricMV"].get<std::string>();
+        std::wstring wpath = std::wstring(path.begin(), path.end());
+        m_pGeoMvFromFile =
+            LoadTextureFromFile(wpath, L"FSRVPUFrame1GeoMv", ResourceFormat::RG16_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
+    }
+    else
+    {
+        CauldronError(L"FSRVPU config json missing: GeometricMV");
+        return;
+    }
+    if (FSRVPUConfig.find("OpticalFlow") != FSRVPUConfig.end() && !FSRVPUConfig["OpticalFlow"].get<std::string>().empty())
+    {
+        std::string path = FSRVPUConfig["OpticalFlow"].get<std::string>();
+        std::wstring wpath = std::wstring(path.begin(), path.end());
+        m_pOptMvFromFile =
+            LoadTextureFromFile(wpath, L"FSRVPUFrame1OptMv", ResourceFormat::RG16_SINT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
+        m_HijackedOpticalFlow = true;
+    }
+    else
+    {
+        m_HijackedOpticalFlow = false;
+    }
+    /*
     m_pColF1FromFile = LoadTextureFromFile(
         L"..\\media\\Color0.png", L"FSRVPUFrame1", ResourceFormat::RGBA8_UNORM, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
     m_pColF2FromFile = LoadTextureFromFile(
@@ -220,7 +292,7 @@ void FSRVPUModule::Init(const json& initData)
         L"..\\media\\GeoMv.exr", L"FSRVPUFrame1GeoMv", ResourceFormat::RG16_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
     m_pOptMvFromFile = LoadTextureFromFile(
         L"..\\media\\OptMf.exr", L"FSRVPUFrame1OptMv", ResourceFormat::RG16_SINT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
-
+    */
     // Get a CPU resource view that we'll use to map the render target to
     GetResourceViewAllocator()->AllocateCPURenderViews(&m_pRTResourceView);
 
@@ -1190,15 +1262,16 @@ void FSRVPUModule::Execute(double deltaTime, CommandList* pCmdList)
         dispatchFg.frameID = m_FrameID;
         dispatchFg.reset   = m_ResetFrameInterpolation;
 
-        bool VPUMode = true;
-        if (VPUMode)
+        if (m_HijackedOpticalFlow)
         {
             const Texture* pOptMfVPUInput = m_pOptMvFromFile;
             //FIXME: FFX_API_RESOURCE_STATE_UNORDERED_ACCESS or FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ?
-            dispatchFg.hijackerOptiflow   = SDKWrapper::ffxGetResourceApi(pOptMfVPUInput->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
+            dispatchFg.doingHijack      = true;
+            dispatchFg.hijackerOptiflow = SDKWrapper::ffxGetResourceApi(pOptMfVPUInput->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
         }
         else
         {
+            dispatchFg.doingHijack      = false;
             dispatchFg.hijackerOptiflow = FfxApiResource({});
         }
 

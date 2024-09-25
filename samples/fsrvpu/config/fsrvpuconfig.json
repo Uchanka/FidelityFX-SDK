@@ -1,21 +1,36 @@
 {
-    "FSRVPU": {
-        "RenderResources": {
-            "ReactiveMask": {
+    "FSR_VPU": 
+    {
+        "RenderResources":
+        {
+            "ReactiveMask":
+            {
                 "Format": "R8_UNORM",
                 "AllowUAV": true,
                 "RenderResolution": false
             },
-            "TransCompMask": {
+            "TransCompMask":
+            {
                 "Format": "R8_UNORM",
                 "AllowUAV": true,
                 "RenderResolution": false
             }
         },
 
-        "RenderModules": [
+        "RenderModules":
+        [
             "FSRVPURenderModule",
             "ToneMappingRenderModule"
-        ]
+        ],
+
+        "RenderModuleOptions":
+        {
+            "CurrentColor": "../media/Color1.png",
+            "PreviousColor": "../media/Color0.png",
+            "CurrentDepth": "../media/Depth1.exr",
+            "PreviousDepth": "../media/Depth0.exr",
+            "GeometricMV": "../media/GeoMv.exr",
+            "OpticalFlow": "../media/OptMf.exr"
+        }
     }
 }

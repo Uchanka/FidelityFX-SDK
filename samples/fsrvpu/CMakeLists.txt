@@ -50,6 +50,8 @@ set(vpuful_src ${CMAKE_CURRENT_SOURCE_DIR}/fsrvpurendermodule.h ${CMAKE_CURRENT_
 # Add config file
 set(config_file ${CMAKE_CURRENT_SOURCE_DIR}/config/fsrvpuconfig.json)
 copyCommand("${config_file}" ${CONFIG_OUTPUT})
+set(config_rm_file ${CMAKE_CURRENT_SOURCE_DIR}/config/fsrvpurendermodule.json)
+copyCommand("${config_rm_file}" ${CONFIG_RM_OUTPUT})
 
 # Add the sample to the solution
 add_executable(${PROJECT_NAME} WIN32 ${default_icon_src} ${default_entry_point} ${default_sample_files} ${config_file} ${vpuful_src} ${fsr_shaders})
@@ -78,9 +80,9 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 	${api_dlls} ${BIN_OUTPUT})
 
 # Add compile definitions to identify the sample
-target_compile_definitions(${PROJECT_NAME} PRIVATE SampleName=L"FidelityFX FSR FFXAPI v1.0"
+target_compile_definitions(${PROJECT_NAME} PRIVATE SampleName=L"FSRVPU Benchmark"
 										   ConfigFileName=L"configs/fsrvpuconfig.json"
-										   ConfigSampleName="FSRVPU"
+										   ConfigSampleName="FSR_VPU"
 										   RenderModuleName=FSRVPU)
 
 # Add manifest info
