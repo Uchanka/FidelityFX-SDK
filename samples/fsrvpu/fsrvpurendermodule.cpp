@@ -279,20 +279,16 @@ void FSRVPUModule::Init(const json& initData)
     {
         m_HijackedOpticalFlow = false;
     }
-    /*
-    m_pColF1FromFile = LoadTextureFromFile(
-        L"..\\media\\Color0.png", L"FSRVPUFrame1", ResourceFormat::RGBA8_UNORM, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
-    m_pColF2FromFile = LoadTextureFromFile(
-        L"..\\media\\Color1.png", L"FSRVPUFrame2", ResourceFormat::RGBA8_UNORM, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
-    m_pDepF1FromFile = LoadTextureFromFile(
-        L"..\\media\\Depth0.exr", L"FSRVPUFrame1Depth", ResourceFormat::R32_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
-    m_pDepF2FromFile = LoadTextureFromFile(
-        L"..\\media\\Depth1.exr", L"FSRVPUFrame2Depth", ResourceFormat::R32_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
-    m_pGeoMvFromFile = LoadTextureFromFile(
-        L"..\\media\\GeoMv.exr", L"FSRVPUFrame1GeoMv", ResourceFormat::RG16_FLOAT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
-    m_pOptMvFromFile = LoadTextureFromFile(
-        L"..\\media\\OptMf.exr", L"FSRVPUFrame1OptMv", ResourceFormat::RG16_SINT, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
-    */
+    if (FSRVPUConfig.find("OutputPath") != FSRVPUConfig.end())
+    {
+        std::string  path  = FSRVPUConfig["OutputPath"].get<std::string>();
+        m_OutputPath = std::wstring(path.begin(), path.end());
+    }
+    else
+    {
+        m_OutputPath = L"../media/";
+    }
+    
     // Get a CPU resource view that we'll use to map the render target to
     GetResourceViewAllocator()->AllocateCPURenderViews(&m_pRTResourceView);
 
@@ -1287,7 +1283,7 @@ void FSRVPUModule::Execute(double deltaTime, CommandList* pCmdList)
         //Note that it's called current but it's already been covered by previous at this point therefore it's 1
         GPUResource*   pOutput     = GPUResource::GetWrappedResourceFromSDK(L"FI_CurrentInterpolationSouce", pOutputFg.resource, &rtDesc, rtResourceState);
         
-        SaveTextureToFile(L"../media/Analyze/Color1.jpg", pOutput);
+        SaveTextureToFile(m_OutputPath + L"Color1.jpg", pOutput);
     }
     if (m_FrameID == 9)
     {
@@ -1296,7 +1292,7 @@ void FSRVPUModule::Execute(double deltaTime, CommandList* pCmdList)
         TextureDesc    rtDesc          = SDKWrapper::GetFrameworkTextureDescription(pOutputFg.description);
         GPUResource*   pOutput     = GPUResource::GetWrappedResourceFromSDK(L"FI_FSRVPUOutput", pOutputFg.resource, &rtDesc, rtResourceState);
         
-        SaveTextureToFile(L"../media/Analyze/Color01.jpg", pOutput);
+        SaveTextureToFile(m_OutputPath + L"Color01.jpg", pOutput);
 
         pOutputFg       = dispatchFg.presentColor;
         rtResourceState = SDKWrapper::GetFrameworkState((FfxResourceStates)pOutputFg.state);
@@ -1304,7 +1300,7 @@ void FSRVPUModule::Execute(double deltaTime, CommandList* pCmdList)
         //Note that it's called current but it's already been covered by previous at this point therefore it's 0
         pOutput         = GPUResource::GetWrappedResourceFromSDK(L"FI_CurrentInterpolationSouce", pOutputFg.resource, &rtDesc, rtResourceState);
 
-        SaveTextureToFile(L"../media/Analyze/Color0.jpg", pOutput);
+        SaveTextureToFile(m_OutputPath + L"Color0.jpg", pOutput);
     }
 
     m_FrameID += uint64_t(1 + m_SimulatePresentSkip);

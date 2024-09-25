@@ -183,6 +183,7 @@ private:
     bool m_OfUiEnabled                              = true;
 
     bool m_HijackedOpticalFlow = false;
+    std::wstring m_OutputPath;
 
     // FFX API Context members
     std::vector<uint64_t> m_FsrVersionIds;
