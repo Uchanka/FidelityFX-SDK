@@ -207,9 +207,6 @@ void FSRVPUModule::Init(const json& initData)
     // Fetch needed resources
     m_pColorTarget           = GetFramework()->GetColorTargetForCallback(GetName());
     m_pTonemappedColorTarget = GetFramework()->GetRenderTexture(L"SwapChainProxy");
-    m_pDepthTarget           = GetFramework()->GetRenderTexture(L"DepthTarget");
-    m_pReactiveMask          = GetFramework()->GetRenderTexture(L"ReactiveMask");
-    m_pCompositionMask       = GetFramework()->GetRenderTexture(L"TransCompMask");
     
     m_pColF1FromFile = LoadTextureFromFile(
         L"..\\media\\Color0.png", L"FSRVPUFrame1", ResourceFormat::RGBA8_UNORM, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
@@ -233,32 +230,7 @@ void FSRVPUModule::Init(const json& initData)
     desc.Width = resInfo.RenderWidth;
     desc.Height = resInfo.RenderHeight;
     desc.Name = L"FSR_OpaqueTexture";
-    m_pOpaqueTexture = GetDynamicResourcePool()->CreateRenderTexture(&desc, [](TextureDesc& desc, uint32_t displayWidth, uint32_t displayHeight, uint32_t renderingWidth, uint32_t renderingHeight)
-        {
-            desc.Width = renderingWidth;
-            desc.Height = renderingHeight;
-        });
-
-    // Create temporary texture to copy color into before upscale
-    {
-        TextureDesc desc = m_pColorTarget->GetDesc();
-        desc.Name        = L"UpscaleIntermediateTarget";
-        desc.Width       = m_pColorTarget->GetDesc().Width;
-        desc.Height      = m_pColorTarget->GetDesc().Height;
-
-        m_pTempTexture = GetDynamicResourcePool()->CreateRenderTexture(
-            &desc, [](TextureDesc& desc, uint32_t displayWidth, uint32_t displayHeight, uint32_t renderingWidth, uint32_t renderingHeight) {
-                desc.Width  = displayWidth;
-                desc.Height = displayHeight;
-            });
-        CauldronAssert(ASSERT_CRITICAL, m_pTempTexture, L"Couldn't create intermediate texture.");
-    }
-   
-    // Create raster views on the reactive mask and composition masks (for clearing and rendering)
-    m_RasterViews.resize(2);
-    m_RasterViews[0] = GetRasterViewAllocator()->RequestRasterView(m_pReactiveMask, ViewDimension::Texture2D);
-    m_RasterViews[1] = GetRasterViewAllocator()->RequestRasterView(m_pCompositionMask, ViewDimension::Texture2D);
-
+    
     // Set our render resolution function as that to use during resize to get render width/height from display width/height
     m_pUpdateFunc = [this](uint32_t displayWidth, uint32_t displayHeight) { return this->UpdateResolution(displayWidth, displayHeight); };
 
@@ -1015,32 +987,6 @@ void FSRVPUModule::Execute(double deltaTime, CommandList* pCmdList)
     GPUResource* pSwapchainBackbuffer = GetFramework()->GetSwapChain()->GetBackBufferRT()->GetCurrentResource();
     FfxApiResource backbuffer            = SDKWrapper::ffxGetResourceApi(pSwapchainBackbuffer, FFX_API_RESOURCE_STATE_PRESENT);
 
-    // copy input source to temp so that the input and output texture of the upscalers is different 
-    {
-        std::vector<Barrier> barriers;
-        barriers.push_back(Barrier::Transition(
-            m_pTempTexture->GetResource(), ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource, ResourceState::CopyDest));
-        barriers.push_back(Barrier::Transition(
-            m_pColorTarget->GetResource(), ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource, ResourceState::CopySource));
-        ResourceBarrier(pCmdList, static_cast<uint32_t>(barriers.size()), barriers.data());
-    }
-
-    {
-        GPUScopedProfileCapture sampleMarker(pCmdList, L"CopyToTemp");
-
-        TextureCopyDesc desc(m_pColorTarget->GetResource(), m_pTempTexture->GetResource());
-        CopyTextureRegion(pCmdList, &desc);
-    }
-
-    {
-        std::vector<Barrier> barriers;
-        barriers.push_back(Barrier::Transition(
-            m_pTempTexture->GetResource(), ResourceState::CopyDest, ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource));
-        barriers.push_back(Barrier::Transition(
-            m_pColorTarget->GetResource(), ResourceState::CopySource, ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource));
-        ResourceBarrier(pCmdList, static_cast<uint32_t>(barriers.size()), barriers.data());
-    }
-
     // Note, inverted depth and display mode are currently handled statically for the run of the sample.
     // If they become changeable at runtime, we'll need to modify how this information is queried
     static bool s_InvertedDepth = GetConfig()->InvertedDepth;
@@ -1071,25 +1017,6 @@ void FSRVPUModule::Execute(double deltaTime, CommandList* pCmdList)
         dispatchUpscale.motionVectors = SDKWrapper::ffxGetResourceApi(pMotionFSRVPUInput->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
         dispatchUpscale.exposure = SDKWrapper::ffxGetResourceApi(nullptr, FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
         dispatchUpscale.output        = SDKWrapper::ffxGetResourceApi(m_pColorTarget->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
-
-        if (m_MaskMode != FSRMaskMode::Disabled)
-        {
-            dispatchUpscale.reactive = SDKWrapper::ffxGetResourceApi(m_pReactiveMask->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
-        }
-        else
-        {
-            dispatchUpscale.reactive = SDKWrapper::ffxGetResourceApi(nullptr, FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
-        }
-
-        if (m_UseMask)
-        {
-            dispatchUpscale.transparencyAndComposition =
-                SDKWrapper::ffxGetResourceApi(m_pCompositionMask->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
-        }
-        else
-        {
-            dispatchUpscale.transparencyAndComposition = SDKWrapper::ffxGetResourceApi(nullptr, FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
-        }
 
         // Jitter is calculated earlier in the frame using a callback from the camera update
         dispatchUpscale.jitterOffset.x      = -m_JitterX;
@@ -1325,38 +1252,6 @@ void FSRVPUModule::PreTransCallback(double deltaTime, CommandList* pCmdList)
 {
     GPUScopedProfileCapture sampleMarker(pCmdList, L"Pre-Trans (FSR)");
 
-    std::vector<Barrier> barriers;
-    barriers.push_back(Barrier::Transition(m_pReactiveMask->GetResource(), ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource, ResourceState::RenderTargetResource));
-    barriers.push_back(Barrier::Transition(m_pCompositionMask->GetResource(), ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource, ResourceState::RenderTargetResource));
-    ResourceBarrier(pCmdList, static_cast<uint32_t>(barriers.size()), barriers.data());
-
-    // We need to clear the reactive and composition masks before any translucencies are rendered into them
-    float clearColor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-    ClearRenderTarget(pCmdList, &m_RasterViews[0]->GetResourceView(), clearColor);
-    ClearRenderTarget(pCmdList, &m_RasterViews[1]->GetResourceView(), clearColor);
-
-    barriers.clear();
-    barriers.push_back(Barrier::Transition(m_pReactiveMask->GetResource(), ResourceState::RenderTargetResource, ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource));
-    barriers.push_back(Barrier::Transition(m_pCompositionMask->GetResource(), ResourceState::RenderTargetResource, ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource));
-    ResourceBarrier(pCmdList, static_cast<uint32_t>(barriers.size()), barriers.data());
-
-    if (m_MaskMode != FSRMaskMode::Auto)
-        return;
-
-    barriers.clear();
-    barriers.push_back(Barrier::Transition(m_pColorTarget->GetResource(), ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource, ResourceState::CopySource));
-    barriers.push_back(Barrier::Transition(m_pOpaqueTexture->GetResource(), ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource, ResourceState::CopyDest));
-    ResourceBarrier(pCmdList, static_cast<uint32_t>(barriers.size()), barriers.data());
-
-    // Copy the color render target before we apply translucency
-    TextureCopyDesc copyColor = TextureCopyDesc(m_pColorTarget->GetResource(), m_pOpaqueTexture->GetResource());
-    CopyTextureRegion(pCmdList, &copyColor);
-
-    barriers.clear();
-    barriers.push_back(Barrier::Transition(m_pColorTarget->GetResource(), ResourceState::CopySource, ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource));
-    barriers.push_back(Barrier::Transition(m_pOpaqueTexture->GetResource(), ResourceState::CopyDest, ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource));
-    ResourceBarrier(pCmdList, static_cast<uint32_t>(barriers.size()), barriers.data());
-
     // update intex for UI doublebuffering
     UIRenderModule* uimod = static_cast<UIRenderModule*>(GetFramework()->GetRenderModule("UIRenderModule"));
     m_curUiTextureIndex   = m_DoublebufferInSwapchain ? 0 : (++m_curUiTextureIndex) & 1;
@@ -1376,10 +1271,7 @@ void FSRVPUModule::PostTransCallback(double deltaTime, CommandList* pCmdList)
 #elif defined(FFX_API_VK)
     dispatchDesc.commandList   = pCmdList->GetImpl()->VKCmdBuffer();
 #endif  // defined(FFX_API_DX12)
-    dispatchDesc.colorOpaqueOnly = SDKWrapper::ffxGetResourceApi(m_pOpaqueTexture->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
-    dispatchDesc.colorPreUpscale = SDKWrapper::ffxGetResourceApi(m_pColorTarget->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
-    dispatchDesc.outReactive = SDKWrapper::ffxGetResourceApi(m_pReactiveMask->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
-
+   
     const ResolutionInfo& resInfo = GetFramework()->GetResolutionInfo();
     dispatchDesc.renderSize.width = resInfo.RenderWidth;
     dispatchDesc.renderSize.height = resInfo.RenderHeight;

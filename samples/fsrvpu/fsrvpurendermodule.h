@@ -198,12 +198,6 @@ private:
     // FSR resources
     const cauldron::Texture*  m_pColorTarget           = nullptr;
     const cauldron::Texture*  m_pTonemappedColorTarget = nullptr;
-    const cauldron::Texture*  m_pTempTexture           = nullptr;
-    const cauldron::Texture*  m_pDepthTarget           = nullptr;
-    const cauldron::Texture*  m_pMotionVectors         = nullptr;
-    const cauldron::Texture*  m_pReactiveMask          = nullptr;
-    const cauldron::Texture*  m_pCompositionMask       = nullptr;
-    const cauldron::Texture*  m_pOpaqueTexture         = nullptr;
 
     // FSR counts from 1, and so do I
     const cauldron::Texture* m_pColF1FromFile = nullptr;
