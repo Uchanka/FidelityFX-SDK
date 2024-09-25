@@ -18,15 +18,8 @@
         "RenderModules": [
             "RasterShadowRenderModule",
             "GBufferRenderModule",
-            "LightingRenderModule",
             "FSRVPURenderModule",
             "ToneMappingRenderModule"
-        ],
-
-        "FPSLimiter": {
-            "Enable": true,
-            "UseGPULimiter": false,
-            "TargetFPS": 60
-        }
+        ]
     }
 }
