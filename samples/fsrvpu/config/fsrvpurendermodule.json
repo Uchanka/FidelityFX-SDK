@@ -1,11 +1,15 @@
 {
-    "RenderModuleOptions":
+    "FSRVPURenderModule":
     {
-        "CurrentColor": "../media/Color1.png",
-        "PreviousColor": "../media/Color0.png",
-        "CurrentDepth": "../media/Depth1.exr",
-        "PreviousDepth": "../media/Depth0.exr",
-        "GeometricMV": "../media/GeoMv.exr",
-        "OpticalFlow": "../media/OptMf.exr"
+        "RenderModuleOptions":
+        {
+            "CurrentColor": "../media/Color1.png",
+            "PreviousColor": "../media/Color0.png",
+            "CurrentDepth": "../media/Depth1.exr",
+            "PreviousDepth": "../media/Depth0.exr",
+            "GeometricMV": "../media/GeoMv.exr",
+            "OpticalFlow": "../media/OptMf.exr",
+            "OutputPath": "./screenshots/"
+        }
     }
 }

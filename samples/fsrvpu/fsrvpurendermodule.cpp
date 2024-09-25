@@ -286,7 +286,7 @@ void FSRVPUModule::Init(const json& initData)
     }
     else
     {
-        m_OutputPath = L"../media/";
+        m_OutputPath = L"./screenshots/";
     }
     
     // Get a CPU resource view that we'll use to map the render target to

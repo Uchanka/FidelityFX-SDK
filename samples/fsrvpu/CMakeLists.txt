@@ -50,8 +50,10 @@ set(vpuful_src ${CMAKE_CURRENT_SOURCE_DIR}/fsrvpurendermodule.h ${CMAKE_CURRENT_
 # Add config file
 set(config_file ${CMAKE_CURRENT_SOURCE_DIR}/config/fsrvpuconfig.json)
 copyCommand("${config_file}" ${CONFIG_OUTPUT})
-set(config_rm_file ${CMAKE_CURRENT_SOURCE_DIR}/config/fsrvpurendermodule.json)
-copyCommand("${config_rm_file}" ${CONFIG_RM_OUTPUT})
+
+set(rm_config_json ${CMAKE_CURRENT_SOURCE_DIR}/config/fsrvpurendermodule.json)
+set(rm_config_dest ${CONFIG_OUTPUT}/rm_configs/fsrvpurendermodule.json)
+configure_file(${rm_config_json} ${rm_config_dest} COPYONLY)
 
 # Add the sample to the solution
 add_executable(${PROJECT_NAME} WIN32 ${default_icon_src} ${default_entry_point} ${default_sample_files} ${config_file} ${vpuful_src} ${fsr_shaders})
@@ -92,5 +94,5 @@ addManifest(${PROJECT_NAME})
 source_group(""						FILES ${default_entry_point})
 source_group("Sample" 					FILES ${fsr_sample_files})
 source_group("Icon"    					FILES ${default_icon_src})
-source_group("Config" 					FILES ${config_file})
+source_group("Config" 					FILES ${config_file} ${config_rm_file})
 source_group("RenderModule"				FILES ${vpuful_src})
