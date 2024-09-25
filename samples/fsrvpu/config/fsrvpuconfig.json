@@ -1,7 +1,5 @@
 {
     "FSRVPU": {
-        "MotionVectorGeneration": "GBufferRenderModule",
-
         "RenderResources": {
             "ReactiveMask": {
                 "Format": "R8_UNORM",
@@ -16,8 +14,6 @@
         },
 
         "RenderModules": [
-            "RasterShadowRenderModule",
-            "GBufferRenderModule",
             "FSRVPURenderModule",
             "ToneMappingRenderModule"
         ]

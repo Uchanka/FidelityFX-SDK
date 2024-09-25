@@ -208,11 +208,9 @@ void FSRVPUModule::Init(const json& initData)
     m_pColorTarget           = GetFramework()->GetColorTargetForCallback(GetName());
     m_pTonemappedColorTarget = GetFramework()->GetRenderTexture(L"SwapChainProxy");
     m_pDepthTarget           = GetFramework()->GetRenderTexture(L"DepthTarget");
-    m_pMotionVectors         = GetFramework()->GetRenderTexture(L"GBufferMotionVectorRT");
     m_pReactiveMask          = GetFramework()->GetRenderTexture(L"ReactiveMask");
     m_pCompositionMask       = GetFramework()->GetRenderTexture(L"TransCompMask");
-    CauldronAssert(ASSERT_CRITICAL, m_pMotionVectors && m_pReactiveMask && m_pCompositionMask, L"Could not get one of the needed resources for FSR Rendermodule.");
-
+    
     m_pColF1FromFile = LoadTextureFromFile(
         L"..\\media\\Color0.png", L"FSRVPUFrame1", ResourceFormat::RGBA8_UNORM, ResourceFlags::AllowRenderTarget | ResourceFlags::AllowUnorderedAccess);
     m_pColF2FromFile = LoadTextureFromFile(
@@ -1067,12 +1065,7 @@ void FSRVPUModule::Execute(double deltaTime, CommandList* pCmdList)
         dispatchUpscale.commandList = pCmdList->GetImpl()->DX12CmdList();
 #elif defined(FFX_API_VK)
         dispatchUpscale.commandList = pCmdList->GetImpl()->VKCmdBuffer();
-#endif  // defined(FFX_API_DX12)
-        /*dispatchUpscale.color       = SDKWrapper::ffxGetResourceApi(m_pTempTexture->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
-        dispatchUpscale.depth         = SDKWrapper::ffxGetResourceApi(m_pDepthTarget->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
-        dispatchUpscale.motionVectors = SDKWrapper::ffxGetResourceApi(m_pMotionVectors->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
-        dispatchUpscale.exposure      = SDKWrapper::ffxGetResourceApi(nullptr, FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);*/
-        
+#endif
         dispatchUpscale.color = SDKWrapper::ffxGetResourceApi(pColorFSRVPUInput->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
         dispatchUpscale.depth = SDKWrapper::ffxGetResourceApi(pDepthFSRVPUInput->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
         dispatchUpscale.motionVectors = SDKWrapper::ffxGetResourceApi(pMotionFSRVPUInput->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
@@ -1143,11 +1136,7 @@ void FSRVPUModule::Execute(double deltaTime, CommandList* pCmdList)
     dispatchFgPrep.commandList   = pCmdList->GetImpl()->DX12CmdList();
 #elif defined(FFX_API_VK)
     dispatchFgPrep.commandList   = pCmdList->GetImpl()->VKCmdBuffer();
-#endif  // defined(FFX_API_DX12)
-    /*
-    dispatchFgPrep.depth = SDKWrapper::ffxGetResourceApi(m_pDepthTarget->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
-    dispatchFgPrep.motionVectors = SDKWrapper::ffxGetResourceApi(m_pMotionVectors->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
-    */
+#endif
     dispatchFgPrep.depth         = SDKWrapper::ffxGetResourceApi(pDepthFSRVPUInput->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
     dispatchFgPrep.motionVectors = SDKWrapper::ffxGetResourceApi(m_pGeoMvFromFile->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
     dispatchFgPrep.flags = 0;
@@ -1302,7 +1291,6 @@ void FSRVPUModule::Execute(double deltaTime, CommandList* pCmdList)
     }
     if (m_FrameID == 9)
     {
-        //FfxApiResource pOutputFg       = SDKWrapper::ffxGetResourceApi(m_pMotionVectors->GetResource(), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
         FfxApiResource pOutputFg       = dispatchFg.outputs[0];
         ResourceState  rtResourceState = SDKWrapper::GetFrameworkState((FfxResourceStates)pOutputFg.state);
         TextureDesc    rtDesc          = SDKWrapper::GetFrameworkTextureDescription(pOutputFg.description);
