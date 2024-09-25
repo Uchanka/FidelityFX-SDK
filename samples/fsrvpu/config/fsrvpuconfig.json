@@ -19,9 +19,6 @@
             "RasterShadowRenderModule",
             "GBufferRenderModule",
             "LightingRenderModule",
-            "SkyDomeRenderModule",
-            "AnimatedTexturesRenderModule",
-            "TranslucencyRenderModule",
             "FSRVPURenderModule",
             "ToneMappingRenderModule"
         ],
