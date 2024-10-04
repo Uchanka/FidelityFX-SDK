@@ -1290,15 +1290,23 @@ void FSRVPUModule::Execute(double deltaTime, CommandList* pCmdList)
         FfxApiResource pOutputFg       = dispatchFg.outputs[0];
         ResourceState  rtResourceState = SDKWrapper::GetFrameworkState((FfxResourceStates)pOutputFg.state);
         TextureDesc    rtDesc          = SDKWrapper::GetFrameworkTextureDescription(pOutputFg.description);
-        GPUResource*   pOutput     = GPUResource::GetWrappedResourceFromSDK(L"FI_FSRVPUOutput", pOutputFg.resource, &rtDesc, rtResourceState);
-        
+        GPUResource*   pOutput         = GPUResource::GetWrappedResourceFromSDK(L"FI_FSRVPUOutput", pOutputFg.resource, &rtDesc, rtResourceState);
+
         SaveTextureToFile(m_OutputPath + L"Color01.jpg", pOutput);
+
+        //We have to save it here or the optical flow would be backwards. Hmm.
+        pOutputFg       = dispatchFg.hijackerOptiflow;
+        rtResourceState = SDKWrapper::GetFrameworkState((FfxResourceStates)pOutputFg.state);
+        rtDesc          = SDKWrapper::GetFrameworkTextureDescription(pOutputFg.description);
+        pOutput         = GPUResource::GetWrappedResourceFromSDK(L"FI_OpticalFlow", pOutputFg.resource, &rtDesc, rtResourceState);
+
+        SaveTextureToFile(m_OutputPath + L"OpticalFlow.jpg", pOutput);
 
         pOutputFg       = dispatchFg.presentColor;
         rtResourceState = SDKWrapper::GetFrameworkState((FfxResourceStates)pOutputFg.state);
         rtDesc          = SDKWrapper::GetFrameworkTextureDescription(pOutputFg.description);
         //Note that it's called current but it's already been covered by previous at this point therefore it's 0
-        pOutput         = GPUResource::GetWrappedResourceFromSDK(L"FI_CurrentInterpolationSouce", pOutputFg.resource, &rtDesc, rtResourceState);
+        pOutput = GPUResource::GetWrappedResourceFromSDK(L"FI_CurrentInterpolationSouce", pOutputFg.resource, &rtDesc, rtResourceState);
 
         SaveTextureToFile(m_OutputPath + L"Color0.jpg", pOutput);
     }

@@ -361,6 +361,7 @@ ffxReturnCode_t ffxProvider_FrameGeneration::Dispatch(ffxContext* context, const
             {
                 fiDispatchDesc.opticalFlowVector = internal_context->backendInterfaceShared.fpGetResource(
                     &internal_context->backendInterfaceShared, internal_context->sharedResources[FFX_FSR3_RESOURCE_IDENTIFIER_OPTICAL_FLOW_VECTOR]);
+                desc->hijackerOptiflow = Convert(fiDispatchDesc.opticalFlowVector);
             }
             fiDispatchDesc.opticalFlowSceneChangeDetection = internal_context->backendInterfaceShared.fpGetResource(&internal_context->backendInterfaceShared, internal_context->sharedResources[FFX_FSR3_RESOURCE_IDENTIFIER_OPTICAL_FLOW_SCD_OUTPUT]);
             fiDispatchDesc.opticalFlowBlockSize = 8;

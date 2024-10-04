@@ -91,7 +91,7 @@ struct ffxDispatchDescFrameGeneration
     //struct FfxApiResource hijackerpreviousColor;      ///<<<<< The sekrit hijacked geometry motion vectors stuff )))))
 
     bool                  doingHijack = false;  ///< A boolean value which when set to true, indicates the hijacked stuff is being used.
-    struct FfxApiResource hijackerOptiflow;           ///<<<<< The sekrit hijacked optical flow stuff )))))
+    mutable struct FfxApiResource hijackerOptiflow;           ///<<<<< The sekrit hijacked optical flow stuff )))))
 
     struct FfxApiResource outputs[4];                 ///< Destination targets (1 for each frame in numGeneratedFrames).
     uint32_t              numGeneratedFrames;         ///< The number of frames to generate from the passed in color target.
